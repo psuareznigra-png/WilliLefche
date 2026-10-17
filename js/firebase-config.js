@@ -13,5 +13,6 @@ window.firebaseConfig = {
   projectId: "willilefche",
   storageBucket: "willilefche.firebasestorage.app",
   messagingSenderId: "469747489287",
-  appId: "1:469747489287:web:6292b3d2985ec6fff3e8a2"
+  appId: "1:469747489287:web:6292b3d2985ec6fff3e8a2",
+  databaseId: "default"
 };

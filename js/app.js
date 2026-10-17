@@ -4,7 +4,7 @@
  */
 
 const State = {
-  rankingDistancia: '10K',
+  rankingDistancia: '1500 m',
   rankingGenero: 'todos',
   atletasQuery: '',
   atletasCat: 'Todas',
@@ -16,7 +16,6 @@ const State = {
   portalTab: 'semana',
   mobileMenuOpen: false,
   loginError: '',
-  showDemoAccess: true,
 };
 
 function esc(str) {
@@ -431,53 +430,65 @@ function viewHome() {
         <div class="mx-auto grid max-w-content gap-10 px-4 py-16 sm:px-6 lg:grid-cols-2">
           <div>
             <div class="flex items-end justify-between">
-              <h2 class="font-display text-3xl font-bold uppercase">Mejores marcas · 10K</h2>
-              <a href="#/rankings" class="text-sm font-medium text-primary hover:underline">Ver todos</a>
+              <h2 class="font-display text-3xl font-bold uppercase">Mejores marcas · 1500 m</h2>
+              <a href="#/rankings" class="text-sm font-medium text-primary hover:underline">Ver rankings</a>
             </div>
-            <ol class="mt-6 divide-y rounded-xl border bg-card">
-              ${top10k
-                .map(
-                  (r, i) => `
-                <li class="flex items-center gap-4 px-5 py-4">
-                  <span class="font-display text-3xl font-extrabold text-primary tabular-nums">${i + 1}</span>
-                  <div class="flex-1">
-                    <p class="font-semibold">${esc(r.nombre)}</p>
-                    <p class="text-sm text-muted-foreground">${esc(r.categoria)} · ${r.edad} años</p>
-                  </div>
-                  <span class="font-display text-2xl font-bold tabular-nums">${esc(r.tiempo)}</span>
-                </li>
-              `
-                )
-                .join('')}
-            </ol>
+            ${
+              top10k.length === 0
+                ? `<div class="mt-6 rounded-xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
+                    Todavía no se han registrado marcas oficiales en esta temporada.
+                  </div>`
+                : `<ol class="mt-6 divide-y rounded-xl border bg-card">
+                    ${top10k
+                      .map(
+                        (r, i) => `
+                      <li class="flex items-center gap-4 px-5 py-4">
+                        <span class="font-display text-3xl font-extrabold text-primary tabular-nums">${i + 1}</span>
+                        <div class="flex-1">
+                          <p class="font-semibold">${esc(r.nombre)}</p>
+                          <p class="text-sm text-muted-foreground">${esc(r.categoria)} · ${r.edad} años</p>
+                        </div>
+                        <span class="font-display text-2xl font-bold tabular-nums">${esc(r.tiempo)}</span>
+                      </li>
+                    `
+                      )
+                      .join('')}
+                  </ol>`
+            }
           </div>
           <div>
             <div class="flex items-end justify-between">
               <h2 class="font-display text-3xl font-bold uppercase">Próximas competencias</h2>
               <a href="#/competencias" class="text-sm font-medium text-primary hover:underline">Calendario</a>
             </div>
-            <ul class="mt-6 space-y-3">
-              ${proximas
-                .map((c) => {
-                  const d = Helpers.diaSemana(c.fecha);
-                  return `
-                  <li class="flex items-center gap-4 rounded-xl border bg-card px-5 py-4">
-                    <div class="w-12 text-center">
-                      <p class="font-display text-3xl font-bold leading-none">${d.num}</p>
-                      <p class="text-xs uppercase text-muted-foreground">${d.mes}</p>
-                    </div>
-                    <div class="flex-1">
-                      <p class="font-semibold">${esc(c.nombre)}</p>
-                      <p class="text-sm text-muted-foreground">${esc(c.lugar)} · ${esc(c.distancias.join(' / '))}</p>
-                    </div>
-                    <span class="rounded-full bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground">
-                      ${esc(c.tipo)}
-                    </span>
-                  </li>
-                `;
-                })
-                .join('')}
-            </ul>
+            ${
+              proximas.length === 0
+                ? `<div class="mt-6 rounded-xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
+                    El calendario de competencias se actualizará con las próximas fechas del equipo.
+                  </div>`
+                : `<ul class="mt-6 space-y-3">
+                    ${proximas
+                      .map((c) => {
+                        const d = Helpers.diaSemana(c.fecha);
+                        return `
+                        <li class="flex items-center gap-4 rounded-xl border bg-card px-5 py-4">
+                          <div class="w-12 text-center">
+                            <p class="font-display text-3xl font-bold leading-none">${d.num}</p>
+                            <p class="text-xs uppercase text-muted-foreground">${d.mes}</p>
+                          </div>
+                          <div class="flex-1">
+                            <p class="font-semibold">${esc(c.nombre)}</p>
+                            <p class="text-sm text-muted-foreground">${esc(c.lugar)} · ${esc(c.distancias.join(' / '))}</p>
+                          </div>
+                          <span class="rounded-full bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground">
+                            ${esc(c.tipo)}
+                          </span>
+                        </li>
+                      `;
+                      })
+                      .join('')}
+                  </ul>`
+            }
           </div>
         </div>
       </section>
@@ -488,7 +499,7 @@ function viewHome() {
             <i data-lucide="smartphone" class="size-8 text-primary"></i>
             <h2 class="mt-4 font-display text-4xl font-bold uppercase">Tres formas de ingresar</h2>
             <p class="mt-3 max-w-xl text-ink-foreground/75">
-              <strong class="text-ink-foreground">Entrenador</strong> gestiona todo.
+              <strong class="text-ink-foreground">Entrenador / Admin</strong> gestiona todo.
               <strong class="text-ink-foreground">Atleta</strong> consulta su plan, pagos y resultados.
               <strong class="text-ink-foreground">Familia</strong> acompaña a corredores menores de edad.
             </p>
@@ -616,37 +627,43 @@ function viewCompetenciasPublic() {
       <main class="mx-auto w-full max-w-content flex-1 px-4 py-12 sm:px-6">
         <h1 class="font-display text-5xl font-extrabold uppercase">Calendario de competencias</h1>
         <p class="mt-2 max-w-2xl text-muted-foreground">Las carreras y torneos en los que participa la Escuela Municipal Willilefche.</p>
-        <ul class="mt-8 grid gap-4 md:grid-cols-2">
-          ${DB.competencias
-            .map((c) => {
-              const d = Helpers.diaSemana(c.fecha);
-              const faltan = Helpers.diasHasta(c.fecha);
-              return `
-              <li class="flex gap-5 rounded-xl border bg-card p-5">
-                <div class="flex w-16 shrink-0 flex-col items-center justify-center rounded-lg bg-ink py-3 text-ink-foreground">
-                  <span class="text-xs uppercase opacity-70">${d.dia}</span>
-                  <span class="font-display text-4xl font-bold leading-none">${d.num}</span>
-                  <span class="text-xs uppercase opacity-70">${d.mes}</span>
-                </div>
-                <div class="flex-1">
-                  <div class="flex items-center gap-2">
-                    <span class="rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground">${esc(c.tipo)}</span>
-                    <span class="text-xs text-muted-foreground">Faltan ${faltan} días</span>
-                  </div>
-                  <h2 class="mt-1 text-2xl font-bold">${esc(c.nombre)}</h2>
-                  <p class="mt-1 flex items-center gap-1 text-sm text-muted-foreground">
-                    <i data-lucide="map-pin" class="size-4"></i> ${esc(c.lugar)}
-                  </p>
-                  <p class="mt-2 text-sm">
-                    Distancias: <span class="font-medium">${esc(c.distancias.join(' · '))}</span>
-                  </p>
-                  <p class="mt-1 text-sm text-muted-foreground">${c.inscriptos.length} atletas del equipo inscriptos</p>
-                </div>
-              </li>
-            `;
-            })
-            .join('')}
-        </ul>
+        ${
+          DB.competencias.length === 0
+            ? `<div class="mt-8 rounded-xl border border-dashed bg-card p-12 text-center text-muted-foreground">
+                Todavía no hay competencias cargadas en el calendario oficial.
+              </div>`
+            : `<ul class="mt-8 grid gap-4 md:grid-cols-2">
+                ${DB.competencias
+                  .map((c) => {
+                    const d = Helpers.diaSemana(c.fecha);
+                    const faltan = Helpers.diasHasta(c.fecha);
+                    return `
+                    <li class="flex gap-5 rounded-xl border bg-card p-5">
+                      <div class="flex w-16 shrink-0 flex-col items-center justify-center rounded-lg bg-ink py-3 text-ink-foreground">
+                        <span class="text-xs uppercase opacity-70">${d.dia}</span>
+                        <span class="font-display text-4xl font-bold leading-none">${d.num}</span>
+                        <span class="text-xs uppercase opacity-70">${d.mes}</span>
+                      </div>
+                      <div class="flex-1">
+                        <div class="flex items-center gap-2">
+                          <span class="rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground">${esc(c.tipo)}</span>
+                          <span class="text-xs text-muted-foreground">Faltan ${faltan} días</span>
+                        </div>
+                        <h2 class="mt-1 text-2xl font-bold">${esc(c.nombre)}</h2>
+                        <p class="mt-1 flex items-center gap-1 text-sm text-muted-foreground">
+                          <i data-lucide="map-pin" class="size-4"></i> ${esc(c.lugar)}
+                        </p>
+                        <p class="mt-2 text-sm">
+                          Distancias: <span class="font-medium">${esc(c.distancias.join(' · '))}</span>
+                        </p>
+                        <p class="mt-1 text-sm text-muted-foreground">${c.inscriptos.length} atletas del equipo inscriptos</p>
+                      </div>
+                    </li>
+                  `;
+                  })
+                  .join('')}
+              </ul>`
+        }
       </main>
       ${renderPublicFooter()}
     </div>
@@ -654,7 +671,6 @@ function viewCompetenciasPublic() {
 }
 
 function viewIngresar() {
-  const menores = DB.atletas.filter((a) => a.tutor);
   return `
     <div class="grid min-h-screen lg:grid-cols-2">
       <div class="track-lines relative hidden bg-ink p-12 text-ink-foreground lg:flex lg:flex-col lg:justify-between">
@@ -679,7 +695,7 @@ function viewIngresar() {
           </div>
 
           <h1 class="font-display text-4xl font-extrabold uppercase">Ingresar a mi cuenta</h1>
-          <p class="mt-1 text-sm text-muted-foreground">Ingresá con el usuario y contraseña asignados por la escuela.</p>
+          <p class="mt-1 text-sm text-muted-foreground">Ingresá con el usuario y contraseña asignados por la Escuela Municipal Willilefche.</p>
 
           <form onsubmit="handleLoginSubmit(event)" class="mt-6 space-y-4">
             ${
@@ -690,13 +706,13 @@ function viewIngresar() {
                 : ''
             }
             <div class="space-y-1.5">
-              <label for="login-user" class="text-sm font-medium">Usuario o correo electrónico</label>
+              <label for="login-user" class="text-sm font-medium">Usuario</label>
               <input
                 id="login-user"
                 type="text"
                 required
                 autocomplete="username"
-                placeholder="Ej.: entrenador, lucia o familia.tomas"
+                placeholder="nombre.apellido (ej.: alejo.rivas o cristian.torres)"
                 class="h-11 w-full rounded-lg border bg-card px-3.5 text-sm outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
@@ -708,7 +724,7 @@ function viewIngresar() {
                   type="password"
                   required
                   autocomplete="current-password"
-                  placeholder="••••••••"
+                  placeholder="Tu número de DNI sin puntos"
                   class="h-11 w-full rounded-lg border bg-card pl-3.5 pr-16 text-sm outline-none focus:ring-2 focus:ring-ring"
                 />
                 <button
@@ -728,74 +744,15 @@ function viewIngresar() {
             </button>
           </form>
 
-          <div class="mt-8 rounded-xl border bg-muted/50 p-4">
-            <div class="flex items-center justify-between">
-              <p class="text-xs font-bold uppercase tracking-wide text-muted-foreground">Accesos rápidos de prueba</p>
-              <span class="text-[11px] text-muted-foreground">Clave atletas: <code class="font-mono">123</code></span>
-            </div>
-            <div class="mt-3 space-y-2.5">
-              <button
-                type="button"
-                onclick="Auth.quickDemoLogin('coach')"
-                class="group flex w-full items-center gap-3 rounded-lg border bg-card p-3 text-left transition-colors hover:border-primary"
-              >
-                <span class="grid size-9 place-items-center rounded-md bg-primary/10 text-primary">
-                  <i data-lucide="clipboard-list" class="size-5"></i>
-                </span>
-                <div class="flex-1 min-w-0">
-                  <p class="text-sm font-semibold">Entrenador (${esc(DB.equipo.entrenador)})</p>
-                  <p class="truncate text-xs text-muted-foreground">Usuario: <code class="font-mono">${esc(DB.equipo.adminUser || 'entrenador')}</code> · Clave: <code class="font-mono">${esc(DB.equipo.adminPass || 'willilefche2026')}</code></p>
-                </div>
-                <i data-lucide="arrow-right" class="size-4 text-muted-foreground group-hover:text-primary"></i>
-              </button>
-
-              <div class="rounded-lg border bg-card p-3">
-                <p class="text-xs font-semibold text-muted-foreground">Entrar como Atleta:</p>
-                <div class="mt-2 flex flex-wrap gap-1.5">
-                  ${DB.atletas
-                    .map(
-                      (a) => `
-                    <button
-                      type="button"
-                      onclick="Auth.quickDemoLogin('athlete', '${a.id}')"
-                      class="rounded-md border bg-muted/50 px-2.5 py-1 text-xs font-semibold hover:border-primary hover:bg-accent"
-                    >
-                      ${esc(a.nombre)} ${esc(a.apellido[0])}.
-                    </button>
-                  `
-                    )
-                    .join('')}
-                </div>
-              </div>
-
-              ${
-                menores.length > 0
-                  ? `<div class="rounded-lg border bg-card p-3">
-                      <p class="text-xs font-semibold text-muted-foreground">Entrar como Familia (Menores):</p>
-                      <div class="mt-2 flex flex-wrap gap-1.5">
-                        ${menores
-                          .map(
-                            (a) => `
-                          <button
-                            type="button"
-                            onclick="Auth.quickDemoLogin('guardian', '${a.id}')"
-                            class="rounded-md border bg-muted/50 px-2.5 py-1 text-xs font-semibold hover:border-primary hover:bg-accent"
-                          >
-                            Familia de ${esc(a.nombre)} (${esc(a.tutor.nombre)})
-                          </button>
-                        `
-                          )
-                          .join('')}
-                      </div>
-                    </div>`
-                  : ''
-              }
-            </div>
+          <div class="mt-6 rounded-xl border bg-muted/40 p-4 text-xs text-muted-foreground space-y-1.5">
+            <p class="font-semibold text-foreground">¿Cómo ingreso por primera vez?</p>
+            <p>• <strong>Atletas y Entrenador:</strong> Usuario <code class="font-mono">nombre.apellido</code> y contraseña tu <strong>DNI sin puntos</strong>.</p>
+            <p>• <strong>Familias (menores):</strong> Usuario <code class="font-mono">familia.apellido</code> y contraseña el <strong>DNI del atleta sin puntos</strong>.</p>
           </div>
 
           <div class="mt-6 flex items-center justify-between text-xs text-muted-foreground">
             <a href="#/" class="hover:text-foreground">← Volver al inicio</a>
-            <button type="button" onclick="openCloudConfigModal()" class="hover:text-primary underline">Configurar Firebase / Backups</button>
+            <button type="button" onclick="openCloudConfigModal()" class="hover:text-primary underline">Conexión Nube / Backups</button>
           </div>
         </div>
       </div>
@@ -994,11 +951,20 @@ function viewCoachDashboard() {
     },
   ];
 
+  const session = Auth.getSession();
+  const saludoNombre =
+    session?.subRole === 'admin'
+      ? 'Administrador'
+      : `Prof. ${DB.equipo.entrenador || 'Cristian Javier Torres'}`;
+
   const content = `
     ${renderPageHeader(
-      `Hola, ${DB.equipo.entrenador.split(' ').slice(-2, -1)[0] || DB.equipo.entrenador}`,
-      `Viernes ${Helpers.fechaCorta(DB.hoy)} · semana del 12 al 18 de octubre`,
+      `Hola, ${saludoNombre}`,
+      `Fecha actual: ${Helpers.fechaCorta(DB.hoy)} · Entrenador: ${DB.equipo.entrenador} (DNI ${DB.equipo.entrenadorDni || '27.884.821'})`,
       `
+        <button type="button" onclick="openNominaCredencialesModal()" class="inline-flex items-center gap-2 rounded-lg border bg-card px-3.5 py-2 text-sm font-medium hover:bg-muted">
+          <i data-lucide="key-round" class="size-4 text-primary"></i> Nómina y Accesos
+        </button>
         <button type="button" onclick="openCloudConfigModal()" class="inline-flex items-center gap-2 rounded-lg border bg-card px-3.5 py-2 text-sm font-medium hover:bg-muted">
           <i data-lucide="database" class="size-4 text-primary"></i> Nube / Backup
         </button>
@@ -1036,32 +1002,36 @@ function viewCoachDashboard() {
             <span class="text-sm text-muted-foreground">Comentarios de los atletas</span>
           </div>
           <ul class="divide-y">
-            ${feed
-              .map((s) => {
-                const a = Helpers.getAtleta(s.atletaId);
-                if (!a) return '';
-                const d = Helpers.diaSemana(s.fecha);
-                return `
-                  <li>
-                    <a href="#/entrenador/atletas/${a.id}" class="flex gap-4 px-5 py-4 transition-colors hover:bg-muted/50">
-                      ${renderAvatar(a.nombre, a.apellido)}
-                      <div class="min-w-0 flex-1">
-                        <p class="text-sm">
-                          <span class="font-semibold">${esc(a.nombre)} ${esc(a.apellido)}</span>
-                          <span class="text-muted-foreground"> · ${esc(s.titulo)} · ${d.dia} ${d.num}</span>
-                        </p>
-                        <p class="mt-1 text-sm text-muted-foreground">“${esc(s.comentario)}”</p>
-                      </div>
-                      ${
-                        s.sensacion
-                          ? `<span class="self-center rounded-md bg-muted px-2 py-1 text-sm font-semibold tabular-nums">${s.sensacion}/5</span>`
-                          : ''
-                      }
-                    </a>
-                  </li>
-                `;
-              })
-              .join('')}
+            ${
+              feed.length === 0
+                ? `<li class="px-5 py-8 text-center text-sm text-muted-foreground">Todavía no hay comentarios registrados en las sesiones.</li>`
+                : feed
+                    .map((s) => {
+                      const a = Helpers.getAtleta(s.atletaId);
+                      if (!a) return '';
+                      const d = Helpers.diaSemana(s.fecha);
+                      return `
+                        <li>
+                          <a href="#/entrenador/atletas/${a.id}" class="flex gap-4 px-5 py-4 transition-colors hover:bg-muted/50">
+                            ${renderAvatar(a.nombre, a.apellido)}
+                            <div class="min-w-0 flex-1">
+                              <p class="text-sm">
+                                <span class="font-semibold">${esc(a.nombre)} ${esc(a.apellido)}</span>
+                                <span class="text-muted-foreground"> · ${esc(s.titulo)} · ${d.dia} ${d.num}</span>
+                              </p>
+                              <p class="mt-1 text-sm text-muted-foreground">“${esc(s.comentario)}”</p>
+                            </div>
+                            ${
+                              s.sensacion
+                                ? `<span class="self-center rounded-md bg-muted px-2 py-1 text-sm font-semibold tabular-nums">${s.sensacion}/5</span>`
+                                : ''
+                            }
+                          </a>
+                        </li>
+                      `;
+                    })
+                    .join('')
+            }
           </ul>
         </section>
 
@@ -1126,32 +1096,37 @@ function viewCoachDashboard() {
 }
 
 function viewCoachAtletas() {
-  const categorias = ['Todas', 'Menores', 'Juveniles', 'Mayores', 'Master A', 'Master B'];
+  const categorias = ['Todas', 'U14', 'U16', 'U18', 'U20', 'Mayores'];
   const q = State.atletasQuery.trim().toLowerCase();
   const filtrados = DB.atletas.filter(
     (a) =>
       (State.atletasCat === 'Todas' || a.categoria === State.atletasCat) &&
-      `${a.nombre} ${a.apellido}`.toLowerCase().includes(q)
+      `${a.nombre} ${a.apellido} ${a.dni || ''} ${a.usuario || ''}`.toLowerCase().includes(q)
   );
 
   const content = `
     ${renderPageHeader(
-      'Atletas',
-      `${DB.atletas.length} corredores en el equipo`,
-      `<button type="button" onclick="openNuevoAtletaModal()" class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-95">
-        <i data-lucide="user-plus" class="size-4"></i> Nuevo atleta
-      </button>`
+      'Atletas · Nómina Oficial',
+      `${DB.atletas.length} atletas registrados en la Escuela Municipal Willilefche`,
+      `
+        <button type="button" onclick="openNominaCredencialesModal()" class="inline-flex items-center gap-2 rounded-lg border bg-card px-3.5 py-2 text-sm font-medium hover:bg-muted">
+          <i data-lucide="key-round" class="size-4 text-primary"></i> Ver tabla de usuarios y claves
+        </button>
+        <button type="button" onclick="openNuevoAtletaModal()" class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-95">
+          <i data-lucide="user-plus" class="size-4"></i> Nuevo atleta
+        </button>
+      `
     )}
     <div class="space-y-4 px-4 py-6 sm:px-8">
       <div class="flex flex-col gap-3 md:flex-row md:items-center">
-        <div class="relative md:w-72">
+        <div class="relative md:w-80">
           <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"></i>
           <input
             type="text"
             value="${esc(State.atletasQuery)}"
             oninput="State.atletasQuery = this.value; renderApp(true)"
             id="search-atletas-input"
-            placeholder="Buscar por nombre"
+            placeholder="Buscar por nombre, apellido, DNI o usuario"
             class="h-10 w-full rounded-lg border bg-card pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
@@ -1191,9 +1166,12 @@ function viewCoachAtletas() {
                       <div class="flex items-center gap-3">
                         ${renderAvatar(a.nombre, a.apellido, 'size-12 text-lg')}
                         <div class="min-w-0 flex-1">
-                          <p class="truncate text-lg font-semibold">${esc(a.nombre)} ${esc(a.apellido)}</p>
+                          <div class="flex items-center gap-1.5">
+                            ${a.nroNomina ? `<span class="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] font-bold text-muted-foreground">#${a.nroNomina}</span>` : ''}
+                            <p class="truncate text-lg font-semibold">${esc(a.apellido)}, ${esc(a.nombre)}</p>
+                          </div>
                           <p class="text-sm text-muted-foreground">
-                            ${esc(a.categoria)} · ${Helpers.edad(a.fechaNacimiento)} años · ${esc(a.nivel)}
+                            ${esc(a.categoria)} · ${Helpers.edad(a.fechaNacimiento)} años · DNI ${esc(a.dni || '—')}
                           </p>
                         </div>
                         ${
@@ -1202,17 +1180,12 @@ function viewCoachAtletas() {
                             : ''
                         }
                       </div>
-                      <div class="mt-4">
-                        <div class="flex justify-between text-xs">
-                          <span class="text-muted-foreground">Cumplimiento del plan</span>
-                          <span class="font-semibold tabular-nums">${a.adherencia}%</span>
-                        </div>
-                        <div class="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                          <div class="h-full bg-primary" style="width: ${a.adherencia}%"></div>
-                        </div>
+                      <div class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs">
+                        <span class="text-muted-foreground">Nac.: <strong>${Helpers.fechaCorta(a.fechaNacimiento)}</strong></span>
+                        <span class="font-mono text-primary font-semibold">@${esc(a.usuario)}</span>
                       </div>
-                      <div class="mt-4 flex items-center justify-between gap-2 text-sm">
-                        <span class="truncate text-muted-foreground">${esc(a.objetivos[0]?.texto || 'Sin objetivo cargado')}</span>
+                      <div class="mt-3 flex items-center justify-between gap-2 text-sm">
+                        <span class="truncate text-xs text-muted-foreground">${esc(a.objetivos[0]?.texto || 'Ficha activa · Escuela Willilefche')}</span>
                         ${
                           deuda > 0
                             ? `<span class="shrink-0 font-medium tabular-nums ${
@@ -1263,7 +1236,7 @@ function viewCoachAtletaFicha(atletaId) {
         <section>
           <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 class="text-2xl font-bold">Semana del 12 al 18 de octubre</h2>
+              <h2 class="text-2xl font-bold">Planificación semanal</h2>
               <p class="text-sm text-muted-foreground">${hecho} de ${total} km realizados</p>
             </div>
             <button type="button" onclick="openSessionModal('${atleta.id}')" class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-95">
@@ -1301,21 +1274,25 @@ function viewCoachAtletaFicha(atletaId) {
           </div>
           <div class="rounded-xl border bg-card p-5">
             <h3 class="text-xl font-bold">Objetivos</h3>
-            <ul class="mt-3 space-y-4">
-              ${(atleta.objetivos || [])
-                .map(
-                  (o) => `
-                <li>
-                  <p class="text-sm font-medium">${esc(o.texto)}</p>
-                  <p class="text-xs text-muted-foreground">Meta: ${Helpers.fechaCorta(o.fecha)}</p>
-                  <div class="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                    <div class="h-full bg-primary" style="width: ${o.progreso}%"></div>
-                  </div>
-                </li>
-              `
-                )
-                .join('')}
-            </ul>
+            ${
+              (atleta.objetivos || []).length === 0
+                ? `<p class="mt-2 text-sm text-muted-foreground">Sin objetivos específicos cargados aún.</p>`
+                : `<ul class="mt-3 space-y-4">
+                    ${(atleta.objetivos || [])
+                      .map(
+                        (o) => `
+                      <li>
+                        <p class="text-sm font-medium">${esc(o.texto)}</p>
+                        <p class="text-xs text-muted-foreground">Meta: ${Helpers.fechaCorta(o.fecha)}</p>
+                        <div class="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                          <div class="h-full bg-primary" style="width: ${o.progreso}%"></div>
+                        </div>
+                      </li>
+                    `
+                      )
+                      .join('')}
+                  </ul>`
+            }
           </div>
         </aside>
       </div>
@@ -1324,7 +1301,7 @@ function viewCoachAtletaFicha(atletaId) {
     const datoRow = (label, valor) => `
       <div class="grid gap-0.5 py-2.5 sm:grid-cols-[12rem_1fr]">
         <dt class="text-sm text-muted-foreground">${esc(label)}</dt>
-        <dd class="text-sm font-medium">${esc(valor)}</dd>
+        <dd class="text-sm font-medium">${esc(valor || '—')}</dd>
       </div>
     `;
     tabContent = `
@@ -1337,15 +1314,53 @@ function viewCoachAtletaFicha(atletaId) {
                 Dar de baja atleta
               </button>
             </div>
-            <dl class="mt-2 divide-y">
-              ${datoRow('Fecha de nacimiento', `${Helpers.fechaCorta(atleta.fechaNacimiento)} (${Helpers.edad(atleta.fechaNacimiento)} años)`)}
-              ${datoRow('Categoría', atleta.categoria)}
-              ${datoRow('Ciudad', atleta.ciudad)}
-              ${datoRow('Correo', atleta.email)}
-              ${datoRow('Teléfono', atleta.telefono)}
-              ${datoRow('Contacto de emergencia', atleta.contactoEmergencia)}
-              ${atleta.tutor ? datoRow('Cuenta familiar', `${atleta.tutor.nombre} · ${atleta.tutor.email}`) : ''}
-            </dl>
+            <form onsubmit="saveDatosPersonalesAtleta(event, '${atleta.id}')" class="mt-4 space-y-3">
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="text-xs font-medium text-muted-foreground">Nombre</label>
+                  <input id="dp-nombre" required value="${esc(atleta.nombre)}" class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-sm" />
+                </div>
+                <div>
+                  <label class="text-xs font-medium text-muted-foreground">Apellido</label>
+                  <input id="dp-apellido" required value="${esc(atleta.apellido)}" class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-sm" />
+                </div>
+              </div>
+              <div class="grid grid-cols-3 gap-3">
+                <div>
+                  <label class="text-xs font-medium text-muted-foreground">DNI</label>
+                  <input id="dp-dni" required value="${esc(atleta.dni || '')}" class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-sm font-mono" />
+                </div>
+                <div>
+                  <label class="text-xs font-medium text-muted-foreground">Fecha de nacimiento</label>
+                  <input id="dp-fnac" type="date" required value="${esc(atleta.fechaNacimiento)}" onchange="document.getElementById('dp-cat').value = Helpers.calcularCategoria(this.value)" class="mt-1 h-9 w-full rounded-lg border bg-card px-2 text-sm" />
+                </div>
+                <div>
+                  <label class="text-xs font-medium text-muted-foreground">Categoría (${Helpers.edad(atleta.fechaNacimiento)} años)</label>
+                  <select id="dp-cat" class="mt-1 h-9 w-full rounded-lg border bg-card px-2 text-sm">
+                    ${['U12', 'U14', 'U16', 'U18', 'U20', 'Mayores', 'Master A', 'Master B']
+                      .map((c) => `<option value="${c}" ${atleta.categoria === c ? 'selected' : ''}>${c}</option>`)
+                      .join('')}
+                  </select>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="text-xs font-medium text-muted-foreground">Teléfono</label>
+                  <input id="dp-tel" value="${esc(atleta.telefono || '')}" placeholder="+54 2920 ..." class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-sm" />
+                </div>
+                <div>
+                  <label class="text-xs font-medium text-muted-foreground">Correo electrónico</label>
+                  <input id="dp-email" value="${esc(atleta.email || '')}" placeholder="correo@ejemplo.com" class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-sm" />
+                </div>
+              </div>
+              <div>
+                <label class="text-xs font-medium text-muted-foreground">Contacto de emergencia / Familia</label>
+                <input id="dp-emerg" value="${esc(atleta.contactoEmergencia || '')}" class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-sm" />
+              </div>
+              <button type="submit" class="inline-flex h-9 items-center justify-center rounded-lg bg-secondary px-4 text-xs font-semibold text-secondary-foreground hover:opacity-90">
+                Guardar datos personales
+              </button>
+            </form>
           </section>
 
           <section class="rounded-xl border border-primary/30 bg-card p-5">
@@ -1353,17 +1368,17 @@ function viewCoachAtletaFicha(atletaId) {
               <i data-lucide="key-round" class="size-5 text-primary"></i> Credenciales de acceso
             </h2>
             <p class="mt-1 text-xs text-muted-foreground">
-              Definí el usuario y la contraseña con los que ${esc(atleta.nombre)} (y su familia, si es menor) ingresan a la plataforma.
+              Usuario y contraseña con los que ${esc(atleta.nombre)} (y su familia, si es menor) ingresan a la plataforma.
             </p>
             <form onsubmit="saveCredencialesAtleta(event, '${atleta.id}')" class="mt-4 space-y-3">
               <div class="grid grid-cols-2 gap-3">
                 <div>
                   <label class="text-xs font-semibold">Usuario del atleta</label>
-                  <input id="cred-user" required value="${esc(atleta.usuario || atleta.id.split('-')[0])}" class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-sm font-mono" />
+                  <input id="cred-user" required value="${esc(atleta.usuario)}" class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-sm font-mono" />
                 </div>
                 <div>
-                  <label class="text-xs font-semibold">Contraseña del atleta</label>
-                  <input id="cred-pass" required value="${esc(atleta.password || '123')}" class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-sm font-mono" />
+                  <label class="text-xs font-semibold">Contraseña del atleta (DNI sin puntos)</label>
+                  <input id="cred-pass" required value="${esc(atleta.password)}" class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-sm font-mono" />
                 </div>
               </div>
               ${
@@ -1371,11 +1386,11 @@ function viewCoachAtletaFicha(atletaId) {
                   ? `<div class="grid grid-cols-2 gap-3 border-t pt-3">
                       <div>
                         <label class="text-xs font-semibold">Usuario familiar (${esc(atleta.tutor.nombre)})</label>
-                        <input id="cred-tuser" required value="${esc(atleta.tutor.usuario || 'familia.' + (atleta.usuario || 'menor'))}" class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-sm font-mono" />
+                        <input id="cred-tuser" required value="${esc(atleta.tutor.usuario)}" class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-sm font-mono" />
                       </div>
                       <div>
                         <label class="text-xs font-semibold">Contraseña familiar</label>
-                        <input id="cred-tpass" required value="${esc(atleta.tutor.password || '123')}" class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-sm font-mono" />
+                        <input id="cred-tpass" required value="${esc(atleta.tutor.password)}" class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-sm font-mono" />
                       </div>
                     </div>`
                   : ''
@@ -1626,6 +1641,23 @@ function viewCoachAtletaFicha(atletaId) {
 
   return renderCoachShell('atletas', content);
 }
+
+window.saveDatosPersonalesAtleta = (e, atletaId) => {
+  e.preventDefault();
+  const a = Helpers.getAtleta(atletaId);
+  if (!a) return;
+  a.nombre = document.getElementById('dp-nombre').value.trim();
+  a.apellido = document.getElementById('dp-apellido').value.trim();
+  a.dni = document.getElementById('dp-dni').value.trim();
+  a.fechaNacimiento = document.getElementById('dp-fnac').value;
+  a.categoria = document.getElementById('dp-cat').value;
+  a.telefono = document.getElementById('dp-tel').value.trim();
+  a.email = document.getElementById('dp-email').value.trim();
+  a.contactoEmergencia = document.getElementById('dp-emerg').value.trim();
+  saveDB();
+  showToast(`Datos personales de ${a.nombre} actualizados`);
+  renderApp();
+};
 
 window.saveCredencialesAtleta = (e, atletaId) => {
   e.preventDefault();
@@ -2427,7 +2459,7 @@ function closeModal() {
 }
 window.closeModal = closeModal;
 
-function showModalHtml(innerHtml) {
+function showModalHtml(innerHtml, maxWidthCls = 'max-w-lg') {
   let root = document.getElementById('modal-root');
   if (!root) {
     root = document.createElement('div');
@@ -2436,7 +2468,7 @@ function showModalHtml(innerHtml) {
   }
   root.innerHTML = `
     <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onclick="closeModal()">
-      <div class="modal-panel max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border bg-card p-6 shadow-xl" onclick="event.stopPropagation()">
+      <div class="modal-panel max-h-[90vh] w-full ${maxWidthCls} overflow-y-auto rounded-xl border bg-card p-6 shadow-xl" onclick="event.stopPropagation()">
         ${innerHtml}
       </div>
     </div>
@@ -2444,16 +2476,90 @@ function showModalHtml(innerHtml) {
   if (window.lucide) window.lucide.createIcons();
 }
 
+// Modal con la Tabla Completa de la Nómina Oficial y Credenciales de Acceso
+window.openNominaCredencialesModal = () => {
+  const eq = DB.equipo || {};
+  showModalHtml(
+    `
+    <div class="flex items-start justify-between">
+      <div>
+        <h2 class="text-xl font-bold">Nómina Oficial y Credenciales de Acceso</h2>
+        <p class="text-sm text-muted-foreground">Escuela Municipal de Atletismo Willilefche · Valcheta</p>
+      </div>
+      <button type="button" onclick="closeModal()" class="text-muted-foreground hover:text-foreground">✕</button>
+    </div>
+
+    <div class="mt-4 space-y-4">
+      <div class="rounded-xl border bg-muted/40 p-3.5">
+        <p class="text-xs font-bold uppercase tracking-wide text-primary">Entrenador (N.º 19)</p>
+        <p class="mt-1 text-sm font-semibold">${esc(eq.entrenador || 'Cristian Javier Torres')} · DNI ${esc(eq.entrenadorDni || '27.884.821')} · Nac: 02/07/1980</p>
+        <p class="mt-1 text-xs text-muted-foreground">
+          Usuario: <code class="rounded bg-card px-1.5 py-0.5 font-mono font-bold text-foreground">${esc(eq.coachUser || 'cristian.torres')}</code> ·
+          Contraseña: <code class="rounded bg-card px-1.5 py-0.5 font-mono font-bold text-foreground">${esc(eq.coachPass || '27884821')}</code>
+        </p>
+      </div>
+
+      <div class="overflow-x-auto rounded-xl border bg-card">
+        <table class="w-full min-w-[44rem] text-xs">
+          <thead class="border-b bg-muted/50 text-left text-muted-foreground">
+            <tr>
+              <th class="px-3 py-2.5 font-semibold">N.º</th>
+              <th class="px-3 py-2.5 font-semibold">Apellido y Nombre</th>
+              <th class="px-3 py-2.5 font-semibold">Fecha Nac.</th>
+              <th class="px-3 py-2.5 font-semibold">Cat.</th>
+              <th class="px-3 py-2.5 font-semibold">DNI</th>
+              <th class="px-3 py-2.5 font-semibold">Usuario Atleta</th>
+              <th class="px-3 py-2.5 font-semibold">Contraseña</th>
+              <th class="px-3 py-2.5 font-semibold">Usuario Familia</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">
+            ${DB.atletas
+              .map(
+                (a, idx) => `
+              <tr class="hover:bg-muted/30">
+                <td class="px-3 py-2 font-mono font-bold text-muted-foreground">${a.nroNomina || idx + 1}</td>
+                <td class="px-3 py-2 font-semibold">
+                  <a href="#/entrenador/atletas/${a.id}" onclick="closeModal()" class="hover:text-primary hover:underline">
+                    ${esc(a.apellido)}, ${esc(a.nombre)}
+                  </a>
+                </td>
+                <td class="px-3 py-2 tabular-nums">${Helpers.fechaCorta(a.fechaNacimiento)} (${Helpers.edad(a.fechaNacimiento)} a.)</td>
+                <td class="px-3 py-2"><span class="rounded bg-secondary px-1.5 py-0.5 font-semibold">${esc(a.categoria)}</span></td>
+                <td class="px-3 py-2 font-mono">${esc(a.dni || '—')}</td>
+                <td class="px-3 py-2 font-mono font-bold text-primary">${esc(a.usuario)}</td>
+                <td class="px-3 py-2 font-mono font-semibold">${esc(a.password)}</td>
+                <td class="px-3 py-2 font-mono text-muted-foreground">${esc(a.tutor?.usuario || '—')}</td>
+              </tr>
+            `
+              )
+              .join('')}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flex justify-end gap-2">
+        <button type="button" onclick="closeModal()" class="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground">
+          Cerrar
+        </button>
+      </div>
+    </div>
+  `,
+    'max-w-4xl'
+  );
+};
+
 // Modal de Configuración de Firebase, Credenciales de Admin y Backups JSON
 window.openCloudConfigModal = () => {
-  const activeCfg = CloudSync.getActiveConfig() || window.firebaseConfig || {};
+  const activeCfg = CloudSync.getActiveFirebaseConfig() || window.firebaseConfig || {};
   const session = Auth.getSession();
   const isCoach = !session || session.role === 'coach';
 
-  showModalHtml(`
+  showModalHtml(
+    `
     <div class="flex items-start justify-between">
       <div>
-        <h2 class="text-xl font-bold">Nube Firebase, Copias de Seguridad y Equipo</h2>
+        <h2 class="text-xl font-bold">Nube Firebase, Copias de Seguridad y Accesos</h2>
         <p class="text-sm text-muted-foreground">Estado actual: <strong>${esc(CloudSync.statusText)}</strong></p>
       </div>
       <button type="button" onclick="closeModal()" class="text-muted-foreground hover:text-foreground">✕</button>
@@ -2477,25 +2583,35 @@ window.openCloudConfigModal = () => {
       ${
         isCoach
           ? `<form onsubmit="saveFirebaseConfigFromUI(event)" class="rounded-xl border bg-card p-4 space-y-3">
-              <p class="text-sm font-bold">2. Conexión con Firebase Firestore</p>
-              <p class="text-xs text-muted-foreground">Pegá las claves de tu proyecto de Firebase (o editalas en <code class="font-mono">js/firebase-config.js</code>).</p>
+              <p class="text-sm font-bold">2. Conexión y Migración a Firebase Firestore</p>
+              <p class="text-xs text-muted-foreground">Podés pegar directamente el bloque <code class="font-mono">firebaseConfig</code> completo abajo o completar los campos:</p>
+              <div>
+                <label class="text-xs font-medium">Pegar bloque firebaseConfig completo (opcional, autocompleta los campos)</label>
+                <textarea
+                  id="fb-raw-paste"
+                  rows="3"
+                  oninput="parsePastedFirebaseConfig(this.value)"
+                  placeholder="Pegá acá el código const firebaseConfig = { apiKey: '...', projectId: '...' };"
+                  class="mt-1 w-full rounded-lg border bg-muted/30 p-2.5 text-xs font-mono"
+                ></textarea>
+              </div>
               <div class="grid grid-cols-2 gap-2.5">
                 <div class="col-span-2">
                   <label class="text-xs font-medium">apiKey</label>
-                  <input id="fb-apikey" required value="${esc(activeCfg.apiKey || '')}" placeholder="AIzaSy..." class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
+                  <input id="fb-apikey" required value="${esc(activeCfg.apiKey && !String(activeCfg.apiKey).includes('PEGAR_AQUI') ? activeCfg.apiKey : '')}" placeholder="AIzaSy..." class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
                 </div>
                 <div>
                   <label class="text-xs font-medium">projectId</label>
-                  <input id="fb-proj" required value="${esc(activeCfg.projectId || '')}" placeholder="willilefche-valcheta" class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
+                  <input id="fb-proj" required value="${esc(activeCfg.projectId && !String(activeCfg.projectId).includes('PEGAR_AQUI') ? activeCfg.projectId : '')}" placeholder="willilefche-valcheta" class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
                 </div>
                 <div>
                   <label class="text-xs font-medium">appId</label>
-                  <input id="fb-appid" value="${esc(activeCfg.appId || '')}" placeholder="1:0000:web:0000" class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
+                  <input id="fb-appid" value="${esc(activeCfg.appId && !String(activeCfg.appId).includes('PEGAR_AQUI') ? activeCfg.appId : '')}" placeholder="1:0000:web:0000" class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
                 </div>
               </div>
-              <div class="flex justify-between items-center pt-1">
-                <button type="button" onclick="CloudSync.pushToCloud().then(ok => showToast(ok ? 'Sincronizado con Firebase' : 'Revisá las credenciales', ok ? 'success' : 'info'))" class="text-xs font-semibold text-primary hover:underline">
-                  Forzar subida a la nube ahora
+              <div class="flex flex-wrap justify-between items-center gap-2 pt-1">
+                <button type="button" onclick="CloudSync.pushToCloud().then(ok => showToast(ok ? '¡Nómina migrada y sincronizada en Firebase!' : 'Revisá las credenciales o reglas de Firestore', ok ? 'success' : 'info'))" class="text-xs font-semibold text-primary hover:underline">
+                  Migrar / Forzar subida a Firebase ahora
                 </button>
                 <button type="submit" class="rounded-lg bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-95">
                   Guardar y Conectar Firebase
@@ -2504,38 +2620,62 @@ window.openCloudConfigModal = () => {
             </form>
 
             <form onsubmit="saveAdminProfile(event)" class="rounded-xl border bg-card p-4 space-y-3">
-              <p class="text-sm font-bold">3. Datos del Entrenador y Clave Admin</p>
+              <p class="text-sm font-bold">3. Credenciales de Administrador y Entrenador</p>
               <div class="grid grid-cols-2 gap-2.5">
                 <div>
-                  <label class="text-xs font-medium">Entrenador</label>
-                  <input id="adm-nombre" required value="${esc(DB.equipo.entrenador)}" class="h-9 w-full rounded-lg border bg-card px-3 text-xs" />
+                  <label class="text-xs font-medium">Usuario Administrador</label>
+                  <input id="adm-user" required value="${esc(DB.equipo.adminUser || 'admin')}" class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
                 </div>
                 <div>
-                  <label class="text-xs font-medium">Sede</label>
-                  <input id="adm-sede" required value="${esc(DB.equipo.sede)}" class="h-9 w-full rounded-lg border bg-card px-3 text-xs" />
+                  <label class="text-xs font-medium">Contraseña Administrador</label>
+                  <input id="adm-pass" required value="${esc(DB.equipo.adminPass || 'Admin123@')}" class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
                 </div>
                 <div>
-                  <label class="text-xs font-medium">Usuario Admin</label>
-                  <input id="adm-user" required value="${esc(DB.equipo.adminUser || 'entrenador')}" class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
+                  <label class="text-xs font-medium">Nombre Entrenador (N.º 19)</label>
+                  <input id="adm-nombre" required value="${esc(DB.equipo.entrenador || 'Cristian Javier Torres')}" class="h-9 w-full rounded-lg border bg-card px-3 text-xs" />
                 </div>
                 <div>
-                  <label class="text-xs font-medium">Contraseña Admin</label>
-                  <input id="adm-pass" required value="${esc(DB.equipo.adminPass || 'willilefche2026')}" class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
+                  <label class="text-xs font-medium">DNI Entrenador</label>
+                  <input id="adm-dni" required value="${esc(DB.equipo.entrenadorDni || '27.884.821')}" class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
+                </div>
+                <div>
+                  <label class="text-xs font-medium">Usuario Entrenador</label>
+                  <input id="adm-coach-user" required value="${esc(DB.equipo.coachUser || 'cristian.torres')}" class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
+                </div>
+                <div>
+                  <label class="text-xs font-medium">Contraseña Entrenador</label>
+                  <input id="adm-coach-pass" required value="${esc(DB.equipo.coachPass || '27884821')}" class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
                 </div>
               </div>
               <div class="flex justify-between items-center pt-1">
-                <button type="button" onclick="if(confirm('¿Restaurar datos de ejemplo originales?')){resetDB(); closeModal(); renderApp(); showToast('Datos restaurados');}" class="text-xs text-destructive hover:underline">
-                  Restaurar datos de fábrica
+                <button type="button" onclick="if(confirm('¿Restaurar la Nómina Inicial original de 16 atletas y entrenador?')){resetDB(); closeModal(); renderApp(); showToast('Nómina Inicial restaurada');}" class="text-xs text-destructive hover:underline">
+                  Restaurar Nómina Inicial original
                 </button>
                 <button type="submit" class="rounded-lg bg-secondary px-3.5 py-1.5 text-xs font-semibold text-secondary-foreground hover:opacity-90">
-                  Guardar datos del equipo
+                  Guardar accesos
                 </button>
               </div>
             </form>`
           : ''
       }
     </div>
-  `);
+  `,
+    'max-w-xl'
+  );
+};
+
+window.parsePastedFirebaseConfig = (rawText) => {
+  if (!rawText) return;
+  const extract = (key) => {
+    const m = rawText.match(new RegExp(key + '\\s*:\\s*["\']([^"\']+)["\']'));
+    return m ? m[1] : '';
+  };
+  const apiKey = extract('apiKey');
+  const projectId = extract('projectId');
+  const appId = extract('appId');
+  if (apiKey) document.getElementById('fb-apikey').value = apiKey;
+  if (projectId) document.getElementById('fb-proj').value = projectId;
+  if (appId) document.getElementById('fb-appid').value = appId;
 };
 
 window.saveFirebaseConfigFromUI = (e) => {
@@ -2549,22 +2689,25 @@ window.saveFirebaseConfigFromUI = (e) => {
     projectId,
     storageBucket: `${projectId}.firebasestorage.app`,
     appId,
+    databaseId: 'default',
   };
   localStorage.setItem('willilefche_firebase_config', JSON.stringify(cfg));
   closeModal();
-  showToast('Configuración de Firebase guardada. Conectando…');
+  showToast('Configuración de Firebase guardada. Conectando y migrando datos…');
   setTimeout(() => location.reload(), 600);
 };
 
 window.saveAdminProfile = (e) => {
   e.preventDefault();
-  DB.equipo.entrenador = document.getElementById('adm-nombre').value.trim();
-  DB.equipo.sede = document.getElementById('adm-sede').value.trim();
   DB.equipo.adminUser = document.getElementById('adm-user').value.trim().toLowerCase();
   DB.equipo.adminPass = document.getElementById('adm-pass').value.trim();
+  DB.equipo.entrenador = document.getElementById('adm-nombre').value.trim();
+  DB.equipo.entrenadorDni = document.getElementById('adm-dni').value.trim();
+  DB.equipo.coachUser = document.getElementById('adm-coach-user').value.trim().toLowerCase();
+  DB.equipo.coachPass = document.getElementById('adm-coach-pass').value.trim();
   saveDB();
   closeModal();
-  showToast('Datos del entrenador actualizados');
+  showToast('Credenciales de Administrador y Entrenador actualizadas');
   renderApp();
 };
 
@@ -2574,7 +2717,7 @@ window.openSessionModal = (atletaId, sesionId = null) => {
   const sesion = sesionId ? (DB.planes[atletaId] || []).find((s) => s.id === sesionId) : null;
   const tipos = ['Rodaje', 'Pasadas', 'Fondo', 'Fartlek', 'Cuestas', 'Fuerza', 'Descanso'];
   const zonas = ['Z1', 'Z2', 'Z3', 'Z4', 'Z5'];
-  const fechaActual = sesion?.fecha || DB.semanaActual[4];
+  const fechaActual = sesion?.fecha || DB.hoy;
   const tipoActual = sesion?.tipo || 'Rodaje';
   const zonaActual = sesion?.intensidad || 'Z2';
 
@@ -2589,15 +2732,8 @@ window.openSessionModal = (atletaId, sesionId = null) => {
     <form onsubmit="saveSessionModal(event, '${atletaId}', '${sesionId || ''}')" class="mt-4 grid gap-4">
       <div class="grid grid-cols-2 gap-3">
         <div class="space-y-1">
-          <label class="text-sm font-medium">Día</label>
-          <select id="s-fecha" class="h-10 w-full rounded-lg border bg-card px-3 text-sm">
-            ${DB.semanaActual
-              .map((f) => {
-                const d = Helpers.diaSemana(f);
-                return `<option value="${f}" ${f === fechaActual ? 'selected' : ''}>${d.dia} ${d.num} ${d.mes}</option>`;
-              })
-              .join('')}
-          </select>
+          <label class="text-sm font-medium">Fecha</label>
+          <input id="s-fecha" type="date" required value="${esc(fechaActual)}" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
         </div>
         <div class="space-y-1">
           <label class="text-sm font-medium">Tipo</label>
@@ -2608,7 +2744,7 @@ window.openSessionModal = (atletaId, sesionId = null) => {
       </div>
       <div class="space-y-1">
         <label class="text-sm font-medium">Título</label>
-        <input id="s-titulo" required value="${esc(sesion?.titulo || '')}" placeholder="Ej.: 6 × 1000 m" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
+        <input id="s-titulo" required value="${esc(sesion?.titulo || '')}" placeholder="Ej.: 6 × 400 m en pista" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
       </div>
       <div class="space-y-1">
         <label class="text-sm font-medium">Descripción</label>
@@ -2617,7 +2753,7 @@ window.openSessionModal = (atletaId, sesionId = null) => {
       <div class="grid grid-cols-2 gap-3">
         <div class="space-y-1">
           <label class="text-sm font-medium">Distancia (km)</label>
-          <input id="s-km" type="number" step="0.5" value="${esc(sesion?.distanciaKm || '')}" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
+          <input id="s-km" type="number" step="0.1" value="${esc(sesion?.distanciaKm || '')}" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
         </div>
         <div class="space-y-1">
           <label class="text-sm font-medium">Duración (min)</label>
@@ -2625,7 +2761,7 @@ window.openSessionModal = (atletaId, sesionId = null) => {
         </div>
         <div class="space-y-1">
           <label class="text-sm font-medium">Ritmo</label>
-          <input id="s-ritmo" value="${esc(sesion?.ritmo || '')}" placeholder="4:05 /km" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
+          <input id="s-ritmo" value="${esc(sesion?.ritmo || '')}" placeholder="4:15 /km" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
         </div>
         <div class="space-y-1">
           <label class="text-sm font-medium">Recuperación</label>
@@ -2799,7 +2935,25 @@ window.saveRegistroModal = (atletaId, sesionId) => {
   renderApp();
 };
 
-// 3. Modal de Nuevo Atleta (con usuario y contraseña incluidos)
+// 3. Modal de Nuevo Atleta (con DNI, cálculo automático de usuario nombre.apellido y categoría)
+window.autoFillNuevoAtletaCreds = () => {
+  const nom = (document.getElementById('na-nombre')?.value || '').trim().split(/\s+/)[0] || '';
+  const ape = (document.getElementById('na-apellido')?.value || '').trim().split(/\s+/)[0] || '';
+  const dni = (document.getElementById('na-dni')?.value || '').replace(/\./g, '').trim();
+  if (nom && ape) {
+    const clean = (s) =>
+      s
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]/g, '');
+    document.getElementById('na-user').value = `${clean(nom)}.${clean(ape)}`;
+  }
+  if (dni) {
+    document.getElementById('na-pass').value = dni;
+  }
+};
+
 window.openNuevoAtletaModal = () => {
   showModalHtml(`
     <div class="flex items-start justify-between">
@@ -2812,29 +2966,48 @@ window.openNuevoAtletaModal = () => {
     <form onsubmit="saveNuevoAtleta(event)" class="mt-4 grid gap-3">
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="text-xs font-medium">Nombre</label>
-          <input id="na-nombre" required class="h-9 w-full rounded-lg border bg-card px-3 text-sm" />
+          <label class="text-xs font-medium">Nombre(s)</label>
+          <input id="na-nombre" required oninput="autoFillNuevoAtletaCreds()" placeholder="Ej.: Alejo Efraín" class="h-9 w-full rounded-lg border bg-card px-3 text-sm" />
         </div>
         <div>
-          <label class="text-xs font-medium">Apellido</label>
-          <input id="na-apellido" required class="h-9 w-full rounded-lg border bg-card px-3 text-sm" />
-        </div>
-      </div>
-      <div class="grid grid-cols-2 gap-3 rounded-lg bg-muted/50 p-2.5">
-        <div>
-          <label class="text-xs font-semibold">Usuario de ingreso</label>
-          <input id="na-user" required placeholder="Ej.: martin" class="mt-1 h-8 w-full rounded-md border bg-card px-2.5 text-xs font-mono" />
-        </div>
-        <div>
-          <label class="text-xs font-semibold">Contraseña inicial</label>
-          <input id="na-pass" required value="123" class="mt-1 h-8 w-full rounded-md border bg-card px-2.5 text-xs font-mono" />
+          <label class="text-xs font-medium">Apellido(s)</label>
+          <input id="na-apellido" required oninput="autoFillNuevoAtletaCreds()" placeholder="Ej.: Rivas Abrate" class="h-9 w-full rounded-lg border bg-card px-3 text-sm" />
         </div>
       </div>
       <div class="grid grid-cols-3 gap-3">
         <div>
-          <label class="text-xs font-medium">Fecha Nac.</label>
-          <input id="na-fnac" type="date" required value="2005-05-15" class="h-9 w-full rounded-lg border bg-card px-2 text-sm" />
+          <label class="text-xs font-medium">DNI</label>
+          <input id="na-dni" required oninput="autoFillNuevoAtletaCreds()" placeholder="50.744.971" class="h-9 w-full rounded-lg border bg-card px-3 text-sm font-mono" />
         </div>
+        <div>
+          <label class="text-xs font-medium">Fecha Nac.</label>
+          <input id="na-fnac" type="date" required value="2012-05-15" onchange="document.getElementById('na-cat').value = Helpers.calcularCategoria(this.value)" class="h-9 w-full rounded-lg border bg-card px-2 text-sm" />
+        </div>
+        <div>
+          <label class="text-xs font-medium">Categoría</label>
+          <select id="na-cat" class="h-9 w-full rounded-lg border bg-card px-2 text-sm">
+            <option value="U12">U12</option>
+            <option value="U14">U14</option>
+            <option value="U16" selected>U16</option>
+            <option value="U18">U18</option>
+            <option value="U20">U20</option>
+            <option value="Mayores">Mayores</option>
+            <option value="Master A">Master A</option>
+            <option value="Master B">Master B</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3 rounded-lg bg-muted/50 p-2.5">
+        <div>
+          <label class="text-xs font-semibold">Usuario (nombre.apellido)</label>
+          <input id="na-user" required placeholder="alejo.rivas" class="mt-1 h-8 w-full rounded-md border bg-card px-2.5 text-xs font-mono" />
+        </div>
+        <div>
+          <label class="text-xs font-semibold">Contraseña (DNI sin puntos)</label>
+          <input id="na-pass" required placeholder="50744971" class="mt-1 h-8 w-full rounded-md border bg-card px-2.5 text-xs font-mono" />
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
         <div>
           <label class="text-xs font-medium">Género</label>
           <select id="na-genero" class="h-9 w-full rounded-lg border bg-card px-2 text-sm">
@@ -2842,18 +3015,6 @@ window.openNuevoAtletaModal = () => {
             <option value="M">Masculino</option>
           </select>
         </div>
-        <div>
-          <label class="text-xs font-medium">Categoría</label>
-          <select id="na-cat" class="h-9 w-full rounded-lg border bg-card px-2 text-sm">
-            <option>Menores</option>
-            <option>Juveniles</option>
-            <option selected>Mayores</option>
-            <option>Master A</option>
-            <option>Master B</option>
-          </select>
-        </div>
-      </div>
-      <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="text-xs font-medium">Nivel</label>
           <select id="na-nivel" class="h-9 w-full rounded-lg border bg-card px-2 text-sm">
@@ -2864,16 +3025,12 @@ window.openNuevoAtletaModal = () => {
         </div>
         <div>
           <label class="text-xs font-medium">Teléfono</label>
-          <input id="na-tel" placeholder="+54 2920 55-0000" class="h-9 w-full rounded-lg border bg-card px-3 text-sm" />
+          <input id="na-tel" placeholder="+54 2920 ..." class="h-9 w-full rounded-lg border bg-card px-3 text-sm" />
         </div>
       </div>
       <div>
-        <label class="text-xs font-medium">Objetivo principal</label>
-        <input id="na-obj" placeholder="Ej.: Correr 10K Aniversario Valcheta" class="h-9 w-full rounded-lg border bg-card px-3 text-sm" />
-      </div>
-      <div>
-        <label class="text-xs font-medium">Tutor (solo si es menor de edad)</label>
-        <input id="na-tutor" placeholder="Dejar vacío si es mayor · Ej.: María López (Madre)" class="h-9 w-full rounded-lg border bg-card px-3 text-sm" />
+        <label class="text-xs font-medium">Tutor / Familia (si es menor de edad)</label>
+        <input id="na-tutor" placeholder="Ej.: Familia Rivas (dejar vacío si es mayor de 18)" class="h-9 w-full rounded-lg border bg-card px-3 text-sm" />
       </div>
       <div class="mt-2 flex justify-end gap-2">
         <button type="button" onclick="closeModal()" class="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">Cancelar</button>
@@ -2887,49 +3044,56 @@ window.saveNuevoAtleta = (e) => {
   e.preventDefault();
   const nombre = document.getElementById('na-nombre').value.trim();
   const apellido = document.getElementById('na-apellido').value.trim();
+  const dni = document.getElementById('na-dni').value.trim();
   const usuario = document.getElementById('na-user').value.trim().toLowerCase();
   const password = document.getElementById('na-pass').value.trim();
+  const fnac = document.getElementById('na-fnac').value;
   const id = `${nombre}-${apellido}`
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-');
   const tutorStr = document.getElementById('na-tutor').value.trim();
-  const objStr = document.getElementById('na-obj').value.trim() || 'Mejorar rendimiento general';
+  const primerApellidoSlug = apellido
+    .split(/\s+/)[0]
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '');
 
   const nuevo = {
     id: `${id}-${Date.now().toString().slice(-3)}`,
+    nroNomina: DB.atletas.length + 1,
     nombre,
     apellido,
+    dni,
     usuario,
     password,
-    fechaNacimiento: document.getElementById('na-fnac').value,
+    fechaNacimiento: fnac,
     genero: document.getElementById('na-genero').value,
     categoria: document.getElementById('na-cat').value,
     nivel: document.getElementById('na-nivel').value,
     ciudad: 'Valcheta',
-    email: `${usuario}@mail.com`,
-    telefono: document.getElementById('na-tel').value.trim() || '+54 2920 55-0100',
-    contactoEmergencia: 'Contacto familiar · Valcheta',
-    tutor: tutorStr
-      ? {
-          nombre: tutorStr,
-          vinculo: 'Tutor/a',
-          email: `familia.${usuario}@mail.com`,
-          usuario: `familia.${usuario}`,
-          password: password || '123',
-        }
-      : undefined,
+    email: '',
+    telefono: document.getElementById('na-tel').value.trim(),
+    contactoEmergencia: tutorStr || `Familia ${apellido}`,
+    tutor:
+      tutorStr || Helpers.edad(fnac) < 18
+        ? {
+            nombre: tutorStr || `Familia ${apellido}`,
+            vinculo: 'Tutor/a',
+            email: '',
+            usuario: `familia.${primerApellidoSlug}`,
+            password: password,
+          }
+        : undefined,
     ingreso: DB.hoy,
-    antecedentes: 'Ingreso reciente a la Escuela Municipal Willilefche.',
-    salud: 'Apto físico al día.',
-    objetivos: [{ texto: objStr, fecha: '2026-12-15', progreso: 20 }],
+    antecedentes: 'Atleta de la Escuela Municipal de Atletismo Willilefche.',
+    salud: 'Apto físico en seguimiento.',
+    objetivos: [],
     marcas: [],
     resultados: [],
-    evolucion: [
-      { mes: 'Sep', ritmoSeg: 340 },
-      { mes: 'Oct', ritmoSeg: 330 },
-    ],
+    evolucion: [],
     extra: [],
     adherencia: 100,
   };
@@ -2955,20 +3119,20 @@ window.openNuevaCompetenciaModal = () => {
     <form onsubmit="saveNuevaCompetencia(event)" class="mt-4 grid gap-3">
       <div>
         <label class="text-xs font-medium">Nombre de la competencia</label>
-        <input id="nc-nombre" required placeholder="Ej.: Corrida Aniversario de Valcheta" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
+        <input id="nc-nombre" required placeholder="Ej.: Torneo Provincial de Pista" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
       </div>
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="text-xs font-medium">Fecha</label>
-          <input id="nc-fecha" type="date" required value="2026-11-30" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
+          <input id="nc-fecha" type="date" required value="${DB.hoy}" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
         </div>
         <div>
           <label class="text-xs font-medium">Tipo</label>
           <select id="nc-tipo" class="h-10 w-full rounded-lg border bg-card px-3 text-sm">
-            <option>Calle</option>
             <option>Pista</option>
-            <option>Trail</option>
+            <option>Calle</option>
             <option>Cross</option>
+            <option>Trail</option>
           </select>
         </div>
       </div>
@@ -2977,8 +3141,8 @@ window.openNuevaCompetenciaModal = () => {
         <input id="nc-lugar" required placeholder="Valcheta, Río Negro" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
       </div>
       <div>
-        <label class="text-xs font-medium">Distancias (separadas por coma)</label>
-        <input id="nc-dist" required value="5K, 10K" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
+        <label class="text-xs font-medium">Pruebas / Distancias (separadas por coma)</label>
+        <input id="nc-dist" required value="80 m, 150 m, 600 m, 1500 m" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
       </div>
       <div class="mt-2 flex justify-end gap-2">
         <button type="button" onclick="closeModal()" class="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">Cancelar</button>
@@ -3002,7 +3166,7 @@ window.saveNuevaCompetencia = (e) => {
     fecha: document.getElementById('nc-fecha').value,
     tipo: document.getElementById('nc-tipo').value,
     lugar: document.getElementById('nc-lugar').value.trim(),
-    distancias: distancias.length ? distancias : ['10K'],
+    distancias: distancias.length ? distancias : ['1500 m'],
     inscriptos: [],
     sugeridos: [],
   });
@@ -3027,7 +3191,7 @@ window.openNuevoCobroModal = () => {
       <div>
         <label class="text-xs font-medium">Atleta</label>
         <select id="np-atleta" class="h-10 w-full rounded-lg border bg-card px-3 text-sm">
-          ${DB.atletas.map((a) => `<option value="${a.id}">${esc(a.nombre)} ${esc(a.apellido)}</option>`).join('')}
+          ${DB.atletas.map((a) => `<option value="${a.id}">${esc(a.apellido)}, ${esc(a.nombre)}</option>`).join('')}
         </select>
       </div>
       <div class="grid grid-cols-2 gap-3">
@@ -3042,17 +3206,17 @@ window.openNuevoCobroModal = () => {
         </div>
         <div>
           <label class="text-xs font-medium">Monto (ARS)</label>
-          <input id="np-monto" type="number" required value="28000" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
+          <input id="np-monto" type="number" required value="15000" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
         </div>
       </div>
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="text-xs font-medium">Detalle</label>
-          <input id="np-detalle" required placeholder="Ej.: Cuota noviembre" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
+          <input id="np-detalle" required placeholder="Ej.: Cuota mensual" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
         </div>
         <div>
           <label class="text-xs font-medium">Vencimiento</label>
-          <input id="np-venc" type="date" required value="2026-11-10" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
+          <input id="np-venc" type="date" required value="${DB.hoy}" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
         </div>
       </div>
       <div class="mt-2 flex justify-end gap-2">
@@ -3098,14 +3262,14 @@ window.openNuevoResultadoModal = (atletaId) => {
       </div>
       <div class="grid grid-cols-3 gap-3">
         <div>
-          <label class="text-xs font-medium">Distancia</label>
+          <label class="text-xs font-medium">Prueba / Distancia</label>
           <select id="nr-dist" class="h-10 w-full rounded-lg border bg-card px-2 text-sm">
             ${DB.distanciasRanking.map((d) => `<option value="${d}">${d}</option>`).join('')}
           </select>
         </div>
         <div>
-          <label class="text-xs font-medium">Tiempo (mm:ss)</label>
-          <input id="nr-tiempo" required placeholder="40:15" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
+          <label class="text-xs font-medium">Marca / Tiempo</label>
+          <input id="nr-tiempo" required placeholder="4:45" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
         </div>
         <div>
           <label class="text-xs font-medium">Fecha</label>
@@ -3115,7 +3279,7 @@ window.openNuevoResultadoModal = (atletaId) => {
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="text-xs font-medium">Puesto General</label>
-          <input id="nr-posg" type="number" required value="5" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
+          <input id="nr-posg" type="number" required value="1" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
         </div>
         <div>
           <label class="text-xs font-medium">Puesto Categoría</label>
@@ -3178,10 +3342,11 @@ function renderApp(preserveSearchFocus = false) {
   const session = Auth.getSession();
   const app = document.getElementById('app');
 
-  // Guardias de seguridad por rol
+  // Guardias de seguridad estrictos por rol
   if (path.startsWith('/entrenador')) {
     if (!session) {
-      Auth.setSession({ role: 'coach', nombre: DB.equipo.entrenador, loginAt: Date.now() });
+      location.hash = '#/ingresar';
+      return;
     } else if (session.role === 'athlete') {
       location.hash = `#/atleta/${session.atletaId}`;
       return;
@@ -3190,7 +3355,11 @@ function renderApp(preserveSearchFocus = false) {
       return;
     }
   } else if (path.startsWith('/atleta')) {
-    if (session && session.role === 'athlete') {
+    if (!session) {
+      location.hash = '#/ingresar';
+      return;
+    }
+    if (session.role === 'athlete') {
       const requestedId = path.replace('/atleta', '').replace('/', '');
       if (requestedId && requestedId !== session.atletaId) {
         location.hash = `#/atleta/${session.atletaId}`;
@@ -3198,7 +3367,11 @@ function renderApp(preserveSearchFocus = false) {
       }
     }
   } else if (path.startsWith('/familia')) {
-    if (session && session.role === 'guardian') {
+    if (!session) {
+      location.hash = '#/ingresar';
+      return;
+    }
+    if (session.role === 'guardian') {
       const requestedId = path.replace('/familia', '').replace('/', '');
       if (requestedId && requestedId !== session.atletaId) {
         location.hash = `#/familia/${session.atletaId}`;
@@ -3241,11 +3414,11 @@ function renderApp(preserveSearchFocus = false) {
     document.title = 'Avisos · Willilefche';
     html = viewCoachAvisos();
   } else if (path === '/atleta' || path.startsWith('/atleta/')) {
-    const atletaId = path.replace('/atleta', '').replace('/', '') || session?.atletaId || 'lucia-gomez';
+    const atletaId = path.replace('/atleta', '').replace('/', '') || session?.atletaId || DB.atletas[0]?.id;
     document.title = 'Mi plan · Willilefche';
     html = viewAtletaPortal(atletaId, false);
   } else if (path === '/familia' || path.startsWith('/familia/')) {
-    const atletaId = path.replace('/familia', '').replace('/', '') || session?.atletaId || 'tomas-ferreyra';
+    const atletaId = path.replace('/familia', '').replace('/', '') || session?.atletaId || DB.atletas[0]?.id;
     document.title = 'Cuenta familiar · Willilefche';
     html = viewAtletaPortal(atletaId, true);
   } else {
@@ -3274,3 +3447,4 @@ window.addEventListener('DOMContentLoaded', () => {
   CloudSync.init();
   renderApp(false);
 });
+

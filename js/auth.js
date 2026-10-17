@@ -1,9 +1,30 @@
 /**
- * auth.js - Gestión de Sesiones y Control de Acceso por Rol (Entrenador, Atleta, Familia)
- * Diseñado para Willilefche · Escuela Municipal de Valcheta
+ * auth.js - Gestión de Sesiones Reales y Control de Acceso por Rol
+ * Roles: Administrador (admin), Entrenador (Cristian Javier Torres), Atletas y Familias
+ * Escuela Municipal de Atletismo Willilefche · Valcheta, Río Negro
  */
 
-const SESSION_KEY = 'willilefche_session_v1';
+const SESSION_KEY = 'willilefche_session_real_v1';
+
+// Limpiar sesiones de prueba anteriores
+try {
+  localStorage.removeItem('willilefche_session_v1');
+} catch (e) {}
+
+function normalizeUserStr(str) {
+  return String(str || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function cleanDniStr(str) {
+  return String(str || '')
+    .trim()
+    .replace(/\./g, '')
+    .replace(/\s+/g, '');
+}
 
 const Auth = {
   getSession() {
@@ -30,42 +51,77 @@ const Auth = {
   },
 
   login(userInput, passwordInput) {
-    const u = String(userInput || '').trim().toLowerCase();
-    const p = String(passwordInput || '').trim();
+    const rawUser = String(userInput || '').trim();
+    const rawPass = String(passwordInput || '').trim();
 
-    if (!u || !p) {
+    if (!rawUser || !rawPass) {
       return { ok: false, error: 'Ingresá tu usuario y contraseña.' };
     }
 
-    const adminUser = (window.DB?.equipo?.adminUser || 'entrenador').toLowerCase();
-    const adminPass = String(window.DB?.equipo?.adminPass || 'willilefche2026');
+    const u = normalizeUserStr(rawUser);
+    const uDni = cleanDniStr(rawUser);
+    const pDni = cleanDniStr(rawPass);
 
-    // 1. Verificar Entrenador / Administrador
-    if (
-      (u === adminUser || u === 'entrenador' || u === 'admin') &&
-      (p === adminPass || p === 'admin123' || p === 'willilefche2026')
-    ) {
+    const eq = window.DB?.equipo || {};
+    const adminUser = normalizeUserStr(eq.adminUser || 'admin');
+    const adminPass = String(eq.adminPass || 'Admin123@');
+
+    // 1. Verificar Usuario Administrador (admin / Admin123@)
+    if (u === adminUser && rawPass === adminPass) {
       const session = {
         role: 'coach',
-        nombre: window.DB?.equipo?.entrenador || 'Entrenador',
+        subRole: 'admin',
+        usuario: eq.adminUser || 'admin',
+        nombre: 'Administrador General',
         loginAt: Date.now(),
       };
       this.setSession(session);
       return { ok: true, session, redirect: '#/entrenador' };
     }
 
-    // 2. Verificar Atletas
+    // 2. Verificar Usuario Entrenador (Fila 19: Cristian Javier Torres · DNI 27.884.821)
+    const coachUser = normalizeUserStr(eq.coachUser || 'cristian.torres');
+    const coachPass = cleanDniStr(eq.coachPass || '27884821');
+    const coachDni = cleanDniStr(eq.entrenadorDni || '27.884.821');
+
+    if (
+      (u === coachUser || u === 'cristian.torres' || uDni === coachDni) &&
+      (rawPass === (eq.coachPass || '27884821') || pDni === coachPass)
+    ) {
+      const session = {
+        role: 'coach',
+        subRole: 'coach',
+        usuario: eq.coachUser || 'cristian.torres',
+        nombre: `Prof. ${eq.entrenador || 'Cristian Javier Torres'}`,
+        dni: eq.entrenadorDni || '27.884.821',
+        loginAt: Date.now(),
+      };
+      this.setSession(session);
+      return { ok: true, session, redirect: '#/entrenador' };
+    }
+
+    // 3. Verificar Usuarios Atletas y Cuentas Familiares
     const atletas = window.DB?.atletas || [];
     for (const a of atletas) {
-      const aUser = (a.usuario || a.id.split('-')[0]).toLowerCase();
-      const aEmail = (a.email || '').toLowerCase();
-      const aFullName = `${a.nombre} ${a.apellido}`.toLowerCase();
-      const aPass = String(a.password || '123');
+      const aUser = normalizeUserStr(a.usuario);
+      const aDni = cleanDniStr(a.dni);
+      const aPass = String(a.password || aDni);
+      const aPassClean = cleanDniStr(aPass);
 
-      if ((u === aUser || u === aEmail || u === aFullName || u === a.id) && p === aPass) {
+      // Coincidencia de Atleta (por nombre.apellido o por DNI)
+      const userMatchesAthlete =
+        u === aUser ||
+        (aDni && uDni === aDni) ||
+        (a.email && u === normalizeUserStr(a.email));
+
+      const passMatchesAthlete = rawPass === aPass || (pDni && pDni === aPassClean);
+
+      if (userMatchesAthlete && passMatchesAthlete) {
         const session = {
           role: 'athlete',
           atletaId: a.id,
+          usuario: a.usuario,
+          dni: a.dni,
           nombre: `${a.nombre} ${a.apellido}`,
           loginAt: Date.now(),
         };
@@ -73,16 +129,21 @@ const Auth = {
         return { ok: true, session, redirect: `#/atleta/${a.id}` };
       }
 
-      // 3. Verificar Cuenta Familiar (Tutores de menores)
+      // 4. Verificar Cuenta Familiar (Tutores de menores)
       if (a.tutor) {
-        const tUser = (a.tutor.usuario || `familia.${aUser}`).toLowerCase();
-        const tEmail = (a.tutor.email || '').toLowerCase();
-        const tPass = String(a.tutor.password || '123');
+        const tUser = normalizeUserStr(a.tutor.usuario);
+        const tPass = String(a.tutor.password || aPass);
+        const tPassClean = cleanDniStr(tPass);
 
-        if ((u === tUser || u === tEmail) && p === tPass) {
+        const userMatchesTutor =
+          u === tUser || (a.tutor.email && u === normalizeUserStr(a.tutor.email));
+        const passMatchesTutor = rawPass === tPass || (pDni && pDni === tPassClean);
+
+        if (userMatchesTutor && passMatchesTutor) {
           const session = {
             role: 'guardian',
             atletaId: a.id,
+            usuario: a.tutor.usuario,
             nombre: a.tutor.nombre,
             vinculo: a.tutor.vinculo,
             loginAt: Date.now(),
@@ -95,41 +156,8 @@ const Auth = {
 
     return {
       ok: false,
-      error: 'Usuario o contraseña incorrectos. Si sos atleta o familia, pedile tus datos a tu entrenador.',
+      error: 'Usuario o contraseña incorrectos. Verificá tus datos o consultá con el entrenador.',
     };
-  },
-
-  quickDemoLogin(role, atletaId = null) {
-    if (role === 'coach') {
-      this.setSession({
-        role: 'coach',
-        nombre: window.DB?.equipo?.entrenador || 'Entrenador',
-        loginAt: Date.now(),
-      });
-      location.hash = '#/entrenador';
-      return;
-    }
-    const a = window.Helpers.getAtleta(atletaId) || window.DB.atletas[0];
-    if (role === 'athlete') {
-      this.setSession({
-        role: 'athlete',
-        atletaId: a.id,
-        nombre: `${a.nombre} ${a.apellido}`,
-        loginAt: Date.now(),
-      });
-      location.hash = `#/atleta/${a.id}`;
-      return;
-    }
-    if (role === 'guardian') {
-      this.setSession({
-        role: 'guardian',
-        atletaId: a.id,
-        nombre: a.tutor?.nombre || 'Familia',
-        vinculo: a.tutor?.vinculo || 'Tutor',
-        loginAt: Date.now(),
-      });
-      location.hash = `#/familia/${a.id}`;
-    }
   },
 };
 

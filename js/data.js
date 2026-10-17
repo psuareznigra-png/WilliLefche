@@ -1,502 +1,777 @@
 /**
- * data.js - Motor de Datos Cache-First + Sincronización en Tiempo Real con Firebase Firestore
- * Diseñado para Willilefche · Escuela Municipal de Valcheta
+ * data.js - Motor de Datos Reales Cache-First + Sincronización en Tiempo Real con Firebase Firestore
+ * Escuela Municipal de Atletismo Willilefche · Valcheta, Río Negro
  */
 
-const STORAGE_KEY = 'willilefche_db_v2';
+const STORAGE_KEY = 'willilefche_db_real_v1';
 const CUSTOM_FB_CONFIG_KEY = 'willilefche_firebase_config';
-const HOY_DEFAULT = '2026-10-16';
+
+// Limpiar restos de bases de prueba anteriores en el navegador
+try {
+  localStorage.removeItem('willilefche_db_v1');
+  localStorage.removeItem('willilefche_db_v2');
+} catch (e) {}
+
+function getTodayISO() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function getCurrentWeekISO(baseIso) {
+  const [y, m, d] = (baseIso || getTodayISO()).split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const dow = dt.getUTCDay(); // 0=Dom, 1=Lun...
+  const diffToMonday = dow === 0 ? -6 : 1 - dow;
+  dt.setUTCDate(dt.getUTCDate() + diffToMonday);
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const cur = new Date(dt);
+    cur.setUTCDate(dt.getUTCDate() + i);
+    days.push(cur.toISOString().slice(0, 10));
+  }
+  return days;
+}
+
+const HOY_DEFAULT = getTodayISO();
 
 const INITIAL_DB = {
+  appKey: 'WLF-VALCHETA-2026',
+  version: 'real-1.0',
   updatedAt: Date.now(),
   hoy: HOY_DEFAULT,
   equipo: {
     nombre: 'Escuela Municipal Willilefche',
-    entrenador: 'Prof. Martín Ríos',
     sede: 'Valcheta, Río Negro',
-    adminUser: 'entrenador',
-    adminPass: 'willilefche2026',
+    // Usuario Administrador
+    adminUser: 'admin',
+    adminPass: 'Admin123@',
+    // Usuario Entrenador (Renglón 19 de la Nómina Inicial)
+    entrenador: 'Cristian Javier Torres',
+    entrenadorDni: '27.884.821',
+    entrenadorFechaNacimiento: '1980-07-02',
+    coachUser: 'cristian.torres',
+    coachPass: '27884821',
   },
-  semanaActual: [
-    '2026-10-12',
-    '2026-10-13',
-    '2026-10-14',
-    '2026-10-15',
-    '2026-10-16',
-    '2026-10-17',
-    '2026-10-18',
-  ],
-  distanciasRanking: ['1500 m', '3000 m', '5K', '10K', '21K', '42K'],
+  semanaActual: getCurrentWeekISO(HOY_DEFAULT),
+  distanciasRanking: ['80 m', '150 m', '300 m', '600 m', '800 m', '1500 m', '3000 m', '5K', '10K', '21K'],
   atletas: [
     {
-      id: 'lucia-gomez',
-      nombre: 'Lucía',
-      apellido: 'Gómez',
-      usuario: 'lucia',
-      password: '123',
-      fechaNacimiento: '1996-03-14',
-      genero: 'F',
-      categoria: 'Mayores',
-      nivel: 'Avanzado',
-      ciudad: 'Valcheta',
-      email: 'lucia.gomez@mail.com',
-      telefono: '+54 2920 55-0142',
-      contactoEmergencia: 'Pablo Gómez (hermano) · +54 2920 55-0199',
-      ingreso: '2022-02-01',
-      antecedentes:
-        'Ex nadadora. Corre desde 2019. Completó 3 medias maratones y una maratón (Buenos Aires 2025).',
-      salud: 'Fascitis plantar en 2024, resuelta. Control con kinesiólogo cada 2 meses.',
-      objetivos: [
-        { texto: 'Bajar de 1:35 en 21K', fecha: '2026-11-22', progreso: 75 },
-        { texto: 'Maratón de Buenos Aires sub 3:20', fecha: '2027-09-20', progreso: 30 },
-      ],
-      marcas: [
-        { distancia: '5K', tiempo: '19:48', fecha: '2026-05-10', competencia: 'Corre Valcheta 5K' },
-        { distancia: '10K', tiempo: '41:12', fecha: '2026-08-02', competencia: '10K del Parque' },
-        { distancia: '21K', tiempo: '1:36:40', fecha: '2026-06-14', competencia: 'Media de Viedma' },
-        { distancia: '42K', tiempo: '3:31:05', fecha: '2025-09-21', competencia: 'Maratón de Buenos Aires' },
-      ],
-      resultados: [
-        { competenciaId: 'c-10k-parque', competencia: '10K del Parque', fecha: '2026-08-02', distancia: '10K', tiempo: '41:12', posGeneral: 38, posCategoria: 4 },
-        { competenciaId: 'c-media-rosario', competencia: 'Media de Viedma', fecha: '2026-06-14', distancia: '21K', tiempo: '1:36:40', posGeneral: 112, posCategoria: 9 },
-        { competenciaId: 'c-corre-cba', competencia: 'Corre Valcheta 5K', fecha: '2026-05-10', distancia: '5K', tiempo: '19:48', posGeneral: 21, posCategoria: 2 },
-      ],
-      evolucion: [
-        { mes: 'May', ritmoSeg: 318 },
-        { mes: 'Jun', ritmoSeg: 314 },
-        { mes: 'Jul', ritmoSeg: 309 },
-        { mes: 'Ago', ritmoSeg: 305 },
-        { mes: 'Sep', ritmoSeg: 301 },
-        { mes: 'Oct', ritmoSeg: 297 },
-      ],
-      extra: [
-        { etiqueta: 'Zapatillas', valor: 'Rotación: 2 pares, cambio a 650 km' },
-        { etiqueta: 'FC máxima', valor: '188 lpm' },
-      ],
-      adherencia: 92,
-    },
-    {
-      id: 'tomas-ferreyra',
-      nombre: 'Tomás',
-      apellido: 'Ferreyra',
-      usuario: 'tomas',
-      password: '123',
-      fechaNacimiento: '2010-07-22',
+      id: 'alejo-rivas-abrate',
+      nroNomina: 1,
+      nombre: 'Alejo Efraín',
+      apellido: 'Rivas Abrate',
+      dni: '50.744.971',
+      usuario: 'alejo.rivas',
+      password: '50744971',
+      fechaNacimiento: '2011-02-07',
       genero: 'M',
-      categoria: 'Menores',
+      categoria: 'U16',
       nivel: 'Intermedio',
       ciudad: 'Valcheta',
-      email: 'tomas.ferreyra@mail.com',
-      telefono: '+54 2920 55-0233',
-      contactoEmergencia: 'Carla Ruiz (madre) · +54 2920 55-0234',
+      email: '',
+      telefono: '',
+      contactoEmergencia: 'Familia Rivas Abrate',
       tutor: {
-        nombre: 'Carla Ruiz',
-        vinculo: 'Madre',
-        email: 'carla.ruiz@mail.com',
-        usuario: 'familia.tomas',
-        password: '123',
+        nombre: 'Familia Rivas Abrate',
+        vinculo: 'Tutor/a',
+        email: '',
+        usuario: 'familia.rivas',
+        password: '50744971',
       },
-      ingreso: '2024-03-04',
-      antecedentes: 'Viene del fútbol infantil. Interés en pista (1500 m y 3000 m).',
-      salud: 'Apto físico vigente hasta 03/2027. Sin lesiones.',
-      objetivos: [
-        { texto: '1500 m por debajo de 4:40', fecha: '2026-12-05', progreso: 60 },
-        { texto: 'Participar del Provincial U18', fecha: '2027-03-15', progreso: 40 },
-      ],
-      marcas: [
-        { distancia: '1500 m', tiempo: '4:51', fecha: '2026-09-12', competencia: 'Torneo de Pista Apertura' },
-        { distancia: '3000 m', tiempo: '10:24', fecha: '2026-07-18', competencia: 'Control de pista' },
-        { distancia: '5K', tiempo: '18:55', fecha: '2026-05-10', competencia: 'Corre Valcheta 5K' },
-      ],
-      resultados: [
-        { competenciaId: 'c-pista-apertura', competencia: 'Torneo de Pista Apertura', fecha: '2026-09-12', distancia: '1500 m', tiempo: '4:51', posGeneral: 6, posCategoria: 3 },
-        { competenciaId: 'c-corre-cba', competencia: 'Corre Valcheta 5K', fecha: '2026-05-10', distancia: '5K', tiempo: '18:55', posGeneral: 14, posCategoria: 1 },
-      ],
-      evolucion: [
-        { mes: 'May', ritmoSeg: 300 },
-        { mes: 'Jun', ritmoSeg: 296 },
-        { mes: 'Jul', ritmoSeg: 290 },
-        { mes: 'Ago', ritmoSeg: 288 },
-        { mes: 'Sep', ritmoSeg: 281 },
-        { mes: 'Oct', ritmoSeg: 278 },
-      ],
-      extra: [{ etiqueta: 'Escuela', valor: 'ESR N° 27 · turno mañana' }],
-      adherencia: 84,
-    },
-    {
-      id: 'graciela-paz',
-      nombre: 'Graciela',
-      apellido: 'Paz',
-      usuario: 'graciela',
-      password: '123',
-      fechaNacimiento: '1968-11-02',
-      genero: 'F',
-      categoria: 'Master B',
-      nivel: 'Intermedio',
-      ciudad: 'Valcheta',
-      email: 'graciela.paz@mail.com',
-      telefono: '+54 2920 55-0311',
-      contactoEmergencia: 'Jorge Luna (esposo) · +54 2920 55-0312',
-      ingreso: '2021-08-16',
-      antecedentes: 'Empezó a correr a los 50. Prefiere trail y 10K de calle.',
-      salud: 'Hipotiroidismo controlado. Trabajo de fuerza 2 veces por semana.',
-      objetivos: [{ texto: 'Completar el trail de 25K en Meseta de Somuncurá', fecha: '2026-11-29', progreso: 65 }],
-      marcas: [
-        { distancia: '5K', tiempo: '26:30', fecha: '2026-05-10', competencia: 'Corre Valcheta 5K' },
-        { distancia: '10K', tiempo: '55:48', fecha: '2026-08-02', competencia: '10K del Parque' },
-      ],
-      resultados: [
-        { competenciaId: 'c-10k-parque', competencia: '10K del Parque', fecha: '2026-08-02', distancia: '10K', tiempo: '55:48', posGeneral: 402, posCategoria: 5 },
-      ],
-      evolucion: [
-        { mes: 'May', ritmoSeg: 402 },
-        { mes: 'Jun', ritmoSeg: 398 },
-        { mes: 'Jul', ritmoSeg: 399 },
-        { mes: 'Ago', ritmoSeg: 392 },
-        { mes: 'Sep', ritmoSeg: 388 },
-        { mes: 'Oct', ritmoSeg: 386 },
-      ],
+      ingreso: '2026-03-01',
+      antecedentes: 'Atleta de la Escuela Municipal de Atletismo Willilefche.',
+      salud: 'Apto físico en seguimiento.',
+      objetivos: [],
+      marcas: [],
+      resultados: [],
+      evolucion: [],
       extra: [],
-      adherencia: 96,
+      adherencia: 100,
     },
     {
-      id: 'diego-alvarez',
-      nombre: 'Diego',
-      apellido: 'Álvarez',
-      usuario: 'diego',
-      password: '123',
-      fechaNacimiento: '1983-01-30',
-      genero: 'M',
-      categoria: 'Master A',
-      nivel: 'Avanzado',
-      ciudad: 'Valcheta',
-      email: 'diego.alvarez@mail.com',
-      telefono: '+54 2920 55-0477',
-      contactoEmergencia: 'Ana Sosa (pareja) · +54 2920 55-0478',
-      ingreso: '2020-04-01',
-      antecedentes: 'Triatleta reconvertido. 6 maratones completadas.',
-      salud: 'Molestia en isquiotibial derecho (sep 2026), en seguimiento.',
-      objetivos: [{ texto: '10K sub 37:00', fecha: '2026-12-13', progreso: 55 }],
-      marcas: [
-        { distancia: '5K', tiempo: '17:52', fecha: '2026-05-10', competencia: 'Corre Valcheta 5K' },
-        { distancia: '10K', tiempo: '37:41', fecha: '2026-08-02', competencia: '10K del Parque' },
-        { distancia: '21K', tiempo: '1:23:10', fecha: '2026-06-14', competencia: 'Media de Viedma' },
-      ],
-      resultados: [
-        { competenciaId: 'c-10k-parque', competencia: '10K del Parque', fecha: '2026-08-02', distancia: '10K', tiempo: '37:41', posGeneral: 12, posCategoria: 2 },
-        { competenciaId: 'c-media-rosario', competencia: 'Media de Viedma', fecha: '2026-06-14', distancia: '21K', tiempo: '1:23:10', posGeneral: 41, posCategoria: 6 },
-      ],
-      evolucion: [
-        { mes: 'May', ritmoSeg: 276 },
-        { mes: 'Jun', ritmoSeg: 273 },
-        { mes: 'Jul', ritmoSeg: 271 },
-        { mes: 'Ago', ritmoSeg: 268 },
-        { mes: 'Sep', ritmoSeg: 274 },
-        { mes: 'Oct', ritmoSeg: 270 },
-      ],
-      extra: [{ etiqueta: 'Reloj', valor: 'Sincroniza con Strava' }],
-      adherencia: 71,
-    },
-    {
-      id: 'sofia-benitez',
-      nombre: 'Sofía',
-      apellido: 'Benítez',
-      usuario: 'sofia',
-      password: '123',
-      fechaNacimiento: '2008-04-09',
+      id: 'valentina-guenumil',
+      nroNomina: 2,
+      nombre: 'Valentina',
+      apellido: 'Guenumil',
+      dni: '47.914.403',
+      usuario: 'valentina.guenumil',
+      password: '47914403',
+      fechaNacimiento: '2007-02-28',
       genero: 'F',
-      categoria: 'Juveniles',
+      categoria: 'U20',
       nivel: 'Intermedio',
       ciudad: 'Valcheta',
-      email: 'sofia.benitez@mail.com',
-      telefono: '+54 2920 55-0590',
-      contactoEmergencia: 'Raúl Benítez (padre) · +54 2920 55-0591',
+      email: '',
+      telefono: '',
+      contactoEmergencia: 'Familia Guenumil',
+      ingreso: '2026-03-01',
+      antecedentes: 'Atleta de la Escuela Municipal de Atletismo Willilefche.',
+      salud: 'Apto físico en seguimiento.',
+      objetivos: [],
+      marcas: [],
+      resultados: [],
+      evolucion: [],
+      extra: [],
+      adherencia: 100,
+    },
+    {
+      id: 'nicolas-cayun',
+      nroNomina: 3,
+      nombre: 'Nicolás Axel',
+      apellido: 'Cayún',
+      dni: '52.322.748',
+      usuario: 'nicolas.cayun',
+      password: '52322748',
+      fechaNacimiento: '2012-04-22',
+      genero: 'M',
+      categoria: 'U16',
+      nivel: 'Intermedio',
+      ciudad: 'Valcheta',
+      email: '',
+      telefono: '',
+      contactoEmergencia: 'Familia Cayún',
       tutor: {
-        nombre: 'Raúl Benítez',
-        vinculo: 'Padre',
-        email: 'raul.benitez@mail.com',
-        usuario: 'familia.sofia',
-        password: '123',
+        nombre: 'Familia Cayún',
+        vinculo: 'Tutor/a',
+        email: '',
+        usuario: 'familia.cayun',
+        password: '52322748',
       },
-      ingreso: '2023-03-01',
-      antecedentes: 'Atletismo escolar. Fuerte en cross country.',
-      salud: 'Apto físico vigente hasta 02/2027.',
-      objetivos: [{ texto: 'Podio en el Cross Provincial', fecha: '2026-11-08', progreso: 70 }],
-      marcas: [
-        { distancia: '3000 m', tiempo: '11:02', fecha: '2026-09-12', competencia: 'Torneo de Pista Apertura' },
-        { distancia: '5K', tiempo: '20:15', fecha: '2026-05-10', competencia: 'Corre Valcheta 5K' },
-      ],
-      resultados: [
-        { competenciaId: 'c-pista-apertura', competencia: 'Torneo de Pista Apertura', fecha: '2026-09-12', distancia: '3000 m', tiempo: '11:02', posGeneral: 4, posCategoria: 2 },
-      ],
-      evolucion: [
-        { mes: 'May', ritmoSeg: 320 },
-        { mes: 'Jun', ritmoSeg: 316 },
-        { mes: 'Jul', ritmoSeg: 311 },
-        { mes: 'Ago', ritmoSeg: 309 },
-        { mes: 'Sep', ritmoSeg: 303 },
-        { mes: 'Oct', ritmoSeg: 300 },
-      ],
+      ingreso: '2026-03-01',
+      antecedentes: 'Atleta de la Escuela Municipal de Atletismo Willilefche.',
+      salud: 'Apto físico en seguimiento.',
+      objetivos: [],
+      marcas: [],
+      resultados: [],
+      evolucion: [],
       extra: [],
-      adherencia: 88,
+      adherencia: 100,
     },
     {
-      id: 'ramiro-quiroga',
-      nombre: 'Ramiro',
-      apellido: 'Quiroga',
-      usuario: 'ramiro',
-      password: '123',
-      fechaNacimiento: '1991-09-05',
+      id: 'rocio-ostertag',
+      nroNomina: 4,
+      nombre: 'Rocío Belén',
+      apellido: 'Ostertag',
+      dni: '52.328.278',
+      usuario: 'rocio.ostertag',
+      password: '52328278',
+      fechaNacimiento: '2012-10-16',
+      genero: 'F',
+      categoria: 'U16',
+      nivel: 'Intermedio',
+      ciudad: 'Valcheta',
+      email: '',
+      telefono: '',
+      contactoEmergencia: 'Familia Ostertag',
+      tutor: {
+        nombre: 'Familia Ostertag',
+        vinculo: 'Tutor/a',
+        email: '',
+        usuario: 'familia.ostertag',
+        password: '52328278',
+      },
+      ingreso: '2026-03-01',
+      antecedentes: 'Atleta de la Escuela Municipal de Atletismo Willilefche.',
+      salud: 'Apto físico en seguimiento.',
+      objetivos: [],
+      marcas: [],
+      resultados: [],
+      evolucion: [],
+      extra: [],
+      adherencia: 100,
+    },
+    {
+      id: 'keyla-albatte-canoel',
+      nroNomina: 5,
+      nombre: 'Keyla Agostina',
+      apellido: 'Albatte Cañoel',
+      dni: '52.325.514',
+      usuario: 'keyla.albatte',
+      password: '52325514',
+      fechaNacimiento: '2011-08-04',
+      genero: 'F',
+      categoria: 'U16',
+      nivel: 'Intermedio',
+      ciudad: 'Valcheta',
+      email: '',
+      telefono: '',
+      contactoEmergencia: 'Familia Albatte Cañoel',
+      tutor: {
+        nombre: 'Familia Albatte Cañoel',
+        vinculo: 'Tutor/a',
+        email: '',
+        usuario: 'familia.albatte',
+        password: '52325514',
+      },
+      ingreso: '2026-03-01',
+      antecedentes: 'Atleta de la Escuela Municipal de Atletismo Willilefche.',
+      salud: 'Apto físico en seguimiento.',
+      objetivos: [],
+      marcas: [],
+      resultados: [],
+      evolucion: [],
+      extra: [],
+      adherencia: 100,
+    },
+    {
+      id: 'jonas-yanca-paillalef',
+      nroNomina: 6,
+      nombre: 'Jonas Taiel',
+      apellido: 'Yanca Paillalef',
+      dni: '53.352.267',
+      usuario: 'jonas.yanca',
+      password: '53352267',
+      fechaNacimiento: '2013-08-30',
       genero: 'M',
-      categoria: 'Mayores',
+      categoria: 'U14',
       nivel: 'Inicial',
       ciudad: 'Valcheta',
-      email: 'ramiro.quiroga@mail.com',
-      telefono: '+54 2920 55-0612',
-      contactoEmergencia: 'Laura Díaz (madre) · +54 2920 55-0613',
-      ingreso: '2026-06-02',
-      antecedentes: 'Sedentario hasta 2026. Objetivo salud y primer 10K.',
-      salud: 'Bajó 9 kg desde el ingreso. Control cardiológico OK (05/2026).',
-      objetivos: [{ texto: 'Correr su primer 10K completo', fecha: '2026-11-15', progreso: 80 }],
-      marcas: [{ distancia: '5K', tiempo: '29:40', fecha: '2026-09-27', competencia: 'Carrera Aniversario Valcheta' }],
-      resultados: [
-        { competenciaId: 'c-solidaria', competencia: 'Carrera Aniversario Valcheta', fecha: '2026-09-27', distancia: '5K', tiempo: '29:40', posGeneral: 288, posCategoria: 61 },
-      ],
-      evolucion: [
-        { mes: 'May', ritmoSeg: 0 },
-        { mes: 'Jun', ritmoSeg: 432 },
-        { mes: 'Jul', ritmoSeg: 418 },
-        { mes: 'Ago', ritmoSeg: 404 },
-        { mes: 'Sep', ritmoSeg: 391 },
-        { mes: 'Oct', ritmoSeg: 382 },
-      ],
+      email: '',
+      telefono: '',
+      contactoEmergencia: 'Familia Yanca Paillalef',
+      tutor: {
+        nombre: 'Familia Yanca Paillalef',
+        vinculo: 'Tutor/a',
+        email: '',
+        usuario: 'familia.yanca',
+        password: '53352267',
+      },
+      ingreso: '2026-03-01',
+      antecedentes: 'Atleta de la Escuela Municipal de Atletismo Willilefche.',
+      salud: 'Apto físico en seguimiento.',
+      objetivos: [],
+      marcas: [],
+      resultados: [],
+      evolucion: [],
       extra: [],
-      adherencia: 79,
+      adherencia: 100,
+    },
+    {
+      id: 'mauro-ghezzi',
+      nroNomina: 7,
+      nombre: 'Mauro',
+      apellido: 'Ghezzi',
+      dni: '50.208.984',
+      usuario: 'mauro.ghezzi',
+      password: '50208984',
+      fechaNacimiento: '2010-05-04',
+      genero: 'M',
+      categoria: 'U18',
+      nivel: 'Intermedio',
+      ciudad: 'Valcheta',
+      email: '',
+      telefono: '',
+      contactoEmergencia: 'Familia Ghezzi',
+      tutor: {
+        nombre: 'Familia Ghezzi',
+        vinculo: 'Tutor/a',
+        email: '',
+        usuario: 'familia.ghezzi',
+        password: '50208984',
+      },
+      ingreso: '2026-03-01',
+      antecedentes: 'Atleta de la Escuela Municipal de Atletismo Willilefche.',
+      salud: 'Apto físico en seguimiento.',
+      objetivos: [],
+      marcas: [],
+      resultados: [],
+      evolucion: [],
+      extra: [],
+      adherencia: 100,
+    },
+    {
+      id: 'lucila-chico',
+      nroNomina: 8,
+      nombre: 'Lucila Aymará',
+      apellido: 'Chico',
+      dni: '53.014.584',
+      usuario: 'lucila.chico',
+      password: '53014584',
+      fechaNacimiento: '2013-05-28',
+      genero: 'F',
+      categoria: 'U14',
+      nivel: 'Inicial',
+      ciudad: 'Valcheta',
+      email: '',
+      telefono: '',
+      contactoEmergencia: 'Familia Chico',
+      tutor: {
+        nombre: 'Familia Chico',
+        vinculo: 'Tutor/a',
+        email: '',
+        usuario: 'familia.chico',
+        password: '53014584',
+      },
+      ingreso: '2026-03-01',
+      antecedentes: 'Atleta de la Escuela Municipal de Atletismo Willilefche.',
+      salud: 'Apto físico en seguimiento.',
+      objetivos: [],
+      marcas: [],
+      resultados: [],
+      evolucion: [],
+      extra: [],
+      adherencia: 100,
+    },
+    {
+      id: 'eluney-quiroga-casas',
+      nroNomina: 9,
+      nombre: 'Eluney Amely',
+      apellido: 'Quiroga Casas',
+      dni: '52.320.548',
+      usuario: 'eluney.quiroga',
+      password: '52320548',
+      fechaNacimiento: '2012-04-28',
+      genero: 'F',
+      categoria: 'U16',
+      nivel: 'Intermedio',
+      ciudad: 'Valcheta',
+      email: '',
+      telefono: '',
+      contactoEmergencia: 'Familia Quiroga Casas',
+      tutor: {
+        nombre: 'Familia Quiroga Casas',
+        vinculo: 'Tutor/a',
+        email: '',
+        usuario: 'familia.quiroga',
+        password: '52320548',
+      },
+      ingreso: '2026-03-01',
+      antecedentes: 'Atleta de la Escuela Municipal de Atletismo Willilefche.',
+      salud: 'Apto físico en seguimiento.',
+      objetivos: [],
+      marcas: [],
+      resultados: [],
+      evolucion: [],
+      extra: [],
+      adherencia: 100,
+    },
+    {
+      id: 'rebea-catriel',
+      nroNomina: 10,
+      nombre: 'Rebea Aylen',
+      apellido: 'Catriel',
+      dni: '53.014.585',
+      usuario: 'rebea.catriel',
+      password: '53014585',
+      fechaNacimiento: '2013-07-16',
+      genero: 'F',
+      categoria: 'U14',
+      nivel: 'Inicial',
+      ciudad: 'Valcheta',
+      email: '',
+      telefono: '',
+      contactoEmergencia: 'Familia Catriel',
+      tutor: {
+        nombre: 'Familia Catriel',
+        vinculo: 'Tutor/a',
+        email: '',
+        usuario: 'familia.catriel',
+        password: '53014585',
+      },
+      ingreso: '2026-03-01',
+      antecedentes: 'Atleta de la Escuela Municipal de Atletismo Willilefche.',
+      salud: 'Apto físico en seguimiento.',
+      objetivos: [],
+      marcas: [],
+      resultados: [],
+      evolucion: [],
+      extra: [],
+      adherencia: 100,
+    },
+    {
+      id: 'ian-mortada',
+      nroNomina: 11,
+      nombre: 'Ian Nayhen',
+      apellido: 'Mortada',
+      dni: '51.237.336',
+      usuario: 'ian.mortada',
+      password: '51237336',
+      fechaNacimiento: '2011-08-09',
+      genero: 'M',
+      categoria: 'U16',
+      nivel: 'Intermedio',
+      ciudad: 'Valcheta',
+      email: '',
+      telefono: '',
+      contactoEmergencia: 'Familia Mortada',
+      tutor: {
+        nombre: 'Familia Mortada',
+        vinculo: 'Tutor/a',
+        email: '',
+        usuario: 'familia.mortada',
+        password: '51237336',
+      },
+      ingreso: '2026-03-01',
+      antecedentes: 'Atleta de la Escuela Municipal de Atletismo Willilefche.',
+      salud: 'Apto físico en seguimiento.',
+      objetivos: [],
+      marcas: [],
+      resultados: [],
+      evolucion: [],
+      extra: [],
+      adherencia: 100,
+    },
+    {
+      id: 'santiago-marileo',
+      nroNomina: 12,
+      nombre: 'Santiago Darío',
+      apellido: 'Marileo',
+      dni: '53.015.898',
+      usuario: 'santiago.marileo',
+      password: '53015898',
+      fechaNacimiento: '2013-04-28',
+      genero: 'M',
+      categoria: 'U14',
+      nivel: 'Inicial',
+      ciudad: 'Valcheta',
+      email: '',
+      telefono: '',
+      contactoEmergencia: 'Familia Marileo',
+      tutor: {
+        nombre: 'Familia Marileo',
+        vinculo: 'Tutor/a',
+        email: '',
+        usuario: 'familia.marileo',
+        password: '53015898',
+      },
+      ingreso: '2026-03-01',
+      antecedentes: 'Atleta de la Escuela Municipal de Atletismo Willilefche.',
+      salud: 'Apto físico en seguimiento.',
+      objetivos: [],
+      marcas: [],
+      resultados: [],
+      evolucion: [],
+      extra: [],
+      adherencia: 100,
+    },
+    {
+      id: 'tiziana-zapata',
+      nroNomina: 13,
+      nombre: 'Tiziana Elizabeth',
+      apellido: 'Zapata',
+      dni: '51.033.277',
+      usuario: 'tiziana.zapata',
+      password: '51033277',
+      fechaNacimiento: '2011-08-04',
+      genero: 'F',
+      categoria: 'U16',
+      nivel: 'Intermedio',
+      ciudad: 'Valcheta',
+      email: '',
+      telefono: '',
+      contactoEmergencia: 'Familia Zapata',
+      tutor: {
+        nombre: 'Familia Zapata',
+        vinculo: 'Tutor/a',
+        email: '',
+        usuario: 'familia.zapata',
+        password: '51033277',
+      },
+      ingreso: '2026-03-01',
+      antecedentes: 'Atleta de la Escuela Municipal de Atletismo Willilefche.',
+      salud: 'Apto físico en seguimiento.',
+      objetivos: [],
+      marcas: [],
+      resultados: [],
+      evolucion: [],
+      extra: [],
+      adherencia: 100,
+    },
+    {
+      id: 'jazmin-quilogran-cerdan',
+      nroNomina: 14,
+      nombre: 'Jazmín Selena',
+      apellido: 'Quilográn Cerdan',
+      dni: '51.237.348',
+      usuario: 'jazmin.quilogran',
+      password: '51237348',
+      fechaNacimiento: '2011-09-19',
+      genero: 'F',
+      categoria: 'U16',
+      nivel: 'Intermedio',
+      ciudad: 'Valcheta',
+      email: '',
+      telefono: '',
+      contactoEmergencia: 'Familia Quilográn Cerdan',
+      tutor: {
+        nombre: 'Familia Quilográn Cerdan',
+        vinculo: 'Tutor/a',
+        email: '',
+        usuario: 'familia.quilogran',
+        password: '51237348',
+      },
+      ingreso: '2026-03-01',
+      antecedentes: 'Atleta de la Escuela Municipal de Atletismo Willilefche.',
+      salud: 'Apto físico en seguimiento.',
+      objetivos: [],
+      marcas: [],
+      resultados: [],
+      evolucion: [],
+      extra: [],
+      adherencia: 100,
+    },
+    {
+      id: 'lucas-furlan',
+      nroNomina: 15,
+      nombre: 'Lucas Benjamín',
+      apellido: 'Furlan',
+      dni: '50.432.052',
+      usuario: 'lucas.furlan',
+      password: '50432052',
+      fechaNacimiento: '2010-07-12',
+      genero: 'M',
+      categoria: 'U18',
+      nivel: 'Intermedio',
+      ciudad: 'Valcheta',
+      email: '',
+      telefono: '',
+      contactoEmergencia: 'Familia Furlan',
+      tutor: {
+        nombre: 'Familia Furlan',
+        vinculo: 'Tutor/a',
+        email: '',
+        usuario: 'familia.furlan',
+        password: '50432052',
+      },
+      ingreso: '2026-03-01',
+      antecedentes: 'Atleta de la Escuela Municipal de Atletismo Willilefche.',
+      salud: 'Apto físico en seguimiento.',
+      objetivos: [],
+      marcas: [],
+      resultados: [],
+      evolucion: [],
+      extra: [],
+      adherencia: 100,
+    },
+    {
+      id: 'malena-bahamonde-uircain',
+      nroNomina: 16,
+      nombre: 'Malena Ahitana',
+      apellido: 'Bahamonde Uircain',
+      dni: '53.014.587',
+      usuario: 'malena.bahamonde',
+      password: '53014587',
+      fechaNacimiento: '2013-06-05',
+      genero: 'F',
+      categoria: 'U14',
+      nivel: 'Inicial',
+      ciudad: 'Valcheta',
+      email: '',
+      telefono: '',
+      contactoEmergencia: 'Familia Bahamonde Uircain',
+      tutor: {
+        nombre: 'Familia Bahamonde Uircain',
+        vinculo: 'Tutor/a',
+        email: '',
+        usuario: 'familia.bahamonde',
+        password: '53014587',
+      },
+      ingreso: '2026-03-01',
+      antecedentes: 'Atleta de la Escuela Municipal de Atletismo Willilefche.',
+      salud: 'Apto físico en seguimiento.',
+      objetivos: [],
+      marcas: [],
+      resultados: [],
+      evolucion: [],
+      extra: [],
+      adherencia: 100,
     },
   ],
-  planes: {
-    'lucia-gomez': [
-      { id: 'l1', fecha: '2026-10-12', tipo: 'Rodaje', titulo: 'Rodaje regenerativo', detalle: 'Suave, conversacional. Terminar con 4 rectas de 80 m.', distanciaKm: 10, ritmo: '5:25–5:40 /km', intensidad: 'Z2', estado: 'realizado', sensacion: 4, comentario: 'Piernas pesadas al principio, después bien.' },
-      { id: 'l2', fecha: '2026-10-13', tipo: 'Pasadas', titulo: '6 × 1000 m', detalle: 'Entrada en calor 3 km + técnica. 6 × 1000 m a ritmo 10K. Vuelta a la calma 2 km.', distanciaKm: 13, ritmo: '4:05 /km', intensidad: 'Z4', recuperacion: '2:00 trote', estado: 'realizado', sensacion: 5, comentario: 'Todas entre 4:02 y 4:06. Excelente.' },
-      { id: 'l3', fecha: '2026-10-14', tipo: 'Fuerza', titulo: 'Fuerza + core', detalle: 'Circuito A: sentadilla búlgara, peso muerto rumano, plancha lateral. 3 vueltas.', duracionMin: 45, intensidad: 'Z2', estado: 'realizado', sensacion: 3 },
-      { id: 'l4', fecha: '2026-10-15', tipo: 'Rodaje', titulo: 'Rodaje medio', detalle: 'Ritmo cómodo, últimos 2 km progresivos.', distanciaKm: 12, ritmo: '5:10 /km', intensidad: 'Z3', estado: 'no-realizado', comentario: 'Me quedé en el trabajo, lo recupero el sábado.' },
-      { id: 'l5', fecha: '2026-10-16', tipo: 'Fartlek', titulo: 'Fartlek 10 × 1′/1′', detalle: '3 km suaves + 10 × (1′ fuerte / 1′ suave) + 2 km suaves.', distanciaKm: 10, ritmo: '3:55 fuerte · 5:30 suave', intensidad: 'Z4', recuperacion: '1′ trote', estado: 'pendiente', modificada: true },
-      { id: 'l6', fecha: '2026-10-17', tipo: 'Descanso', titulo: 'Descanso activo', detalle: 'Movilidad 20′ o caminata.', estado: 'pendiente' },
-      { id: 'l7', fecha: '2026-10-18', tipo: 'Fondo', titulo: 'Fondo largo', detalle: 'Últimos 5 km a ritmo de media maratón (4:28).', distanciaKm: 22, ritmo: '5:05 → 4:28 /km', intensidad: 'Z3', estado: 'pendiente' },
-    ],
-    'tomas-ferreyra': [
-      { id: 't1', fecha: '2026-10-12', tipo: 'Rodaje', titulo: 'Rodaje suave', detalle: 'Rodaje + 6 rectas.', distanciaKm: 6, ritmo: '5:00 /km', intensidad: 'Z2', estado: 'realizado', sensacion: 4 },
-      { id: 't2', fecha: '2026-10-14', tipo: 'Pasadas', titulo: '8 × 400 m en pista', detalle: 'Entrada en calor 2 km + técnica. 8 × 400 a ritmo 1500.', distanciaKm: 7, ritmo: '74″ por vuelta', intensidad: 'Z5', recuperacion: '200 m trote', estado: 'realizado', sensacion: 5, comentario: 'Las últimas dos en 72″!' },
-      { id: 't3', fecha: '2026-10-16', tipo: 'Cuestas', titulo: 'Cuestas cortas', detalle: '10 × 100 m en subida, bajada caminando.', distanciaKm: 6, intensidad: 'Z4', recuperacion: 'Bajada caminando', estado: 'pendiente' },
-      { id: 't4', fecha: '2026-10-18', tipo: 'Rodaje', titulo: 'Rodaje largo', detalle: 'Ritmo cómodo, sin reloj.', distanciaKm: 9, intensidad: 'Z2', estado: 'pendiente' },
-    ],
-    'graciela-paz': [
-      { id: 'g1', fecha: '2026-10-13', tipo: 'Rodaje', titulo: 'Rodaje con desnivel', detalle: 'Circuito del Arroyo, subidas caminando si hace falta.', distanciaKm: 9, intensidad: 'Z2', estado: 'realizado', sensacion: 4 },
-      { id: 'g2', fecha: '2026-10-15', tipo: 'Fuerza', titulo: 'Fuerza tren inferior', detalle: 'Circuito B con bandas.', duracionMin: 40, estado: 'realizado', sensacion: 4 },
-      { id: 'g3', fecha: '2026-10-18', tipo: 'Fondo', titulo: 'Fondo de trail', detalle: 'Sendero Meseta reconocimiento.', distanciaKm: 16, intensidad: 'Z2', estado: 'pendiente' },
-    ],
-    'diego-alvarez': [
-      { id: 'd1', fecha: '2026-10-13', tipo: 'Rodaje', titulo: 'Rodaje suave', detalle: 'Sin cambios de ritmo por molestia isquio.', distanciaKm: 8, intensidad: 'Z2', estado: 'realizado', sensacion: 3, comentario: 'Molestia leve después del km 6.' },
-      { id: 'd2', fecha: '2026-10-15', tipo: 'Pasadas', titulo: '5 × 1600 m', detalle: 'Ritmo 10K objetivo.', distanciaKm: 14, ritmo: '3:42 /km', intensidad: 'Z4', recuperacion: '2:30 trote', estado: 'no-realizado' },
-      { id: 'd3', fecha: '2026-10-17', tipo: 'Fondo', titulo: 'Fondo', detalle: 'Ritmo cómodo.', distanciaKm: 18, intensidad: 'Z2', estado: 'pendiente' },
-    ],
-    'sofia-benitez': [
-      { id: 's1', fecha: '2026-10-13', tipo: 'Pasadas', titulo: '5 × 800 m en césped', detalle: 'Simulación de cross.', distanciaKm: 8, ritmo: '3:40 /km', intensidad: 'Z4', recuperacion: '2:00 trote', estado: 'realizado', sensacion: 4 },
-      { id: 's2', fecha: '2026-10-16', tipo: 'Rodaje', titulo: 'Rodaje suave', detalle: '', distanciaKm: 7, intensidad: 'Z2', estado: 'pendiente' },
-    ],
-    'ramiro-quiroga': [
-      { id: 'r1', fecha: '2026-10-12', tipo: 'Rodaje', titulo: 'Correr/caminar', detalle: '8 × (5′ trote + 1′ caminata).', duracionMin: 48, intensidad: 'Z2', estado: 'realizado', sensacion: 4, comentario: 'Primera vez sin parar en los bloques!' },
-      { id: 'r2', fecha: '2026-10-15', tipo: 'Rodaje', titulo: 'Rodaje continuo', detalle: '40′ continuos muy suave.', duracionMin: 40, intensidad: 'Z2', estado: 'realizado', sensacion: 3 },
-      { id: 'r3', fecha: '2026-10-17', tipo: 'Rodaje', titulo: 'Rodaje 8 km', detalle: 'Ritmo cómodo.', distanciaKm: 8, intensidad: 'Z2', estado: 'pendiente' },
-    ],
-  },
-  competencias: [
-    { id: 'c-cross-prov', nombre: 'Cross Provincial Río Negro', fecha: '2026-11-08', lugar: 'Valcheta, Río Negro', distancias: ['4K', '6K', '8K'], tipo: 'Cross', inscriptos: ['sofia-benitez', 'tomas-ferreyra'], sugeridos: ['lucia-gomez'] },
-    { id: 'c-10k-noche', nombre: '10K Nocturna de la Costanera', fecha: '2026-11-15', lugar: 'Viedma, Río Negro', distancias: ['5K', '10K'], tipo: 'Calle', inscriptos: ['ramiro-quiroga', 'diego-alvarez'], sugeridos: ['graciela-paz'] },
-    { id: 'c-media-cba', nombre: 'Media Maratón Patagónica', fecha: '2026-11-22', lugar: 'Las Grutas, Río Negro', distancias: ['10K', '21K'], tipo: 'Calle', inscriptos: ['lucia-gomez'], sugeridos: ['diego-alvarez'] },
-    { id: 'c-gigantes', nombre: 'Trail Meseta de Somuncurá', fecha: '2026-11-29', lugar: 'Valcheta, Río Negro', distancias: ['12K', '25K'], tipo: 'Trail', inscriptos: ['graciela-paz'], sugeridos: [] },
-    { id: 'c-pista-cierre', nombre: 'Torneo de Pista Clausura', fecha: '2026-12-05', lugar: 'Pista Municipal · Valcheta', distancias: ['800 m', '1500 m', '3000 m'], tipo: 'Pista', inscriptos: ['tomas-ferreyra'], sugeridos: ['sofia-benitez'] },
-  ],
-  pagos: [
-    { id: 'p1', atletaId: 'lucia-gomez', concepto: 'Cuota', detalle: 'Cuota octubre', monto: 28000, vencimiento: '2026-10-10', estado: 'pagado', fechaPago: '2026-10-05' },
-    { id: 'p2', atletaId: 'lucia-gomez', concepto: 'Inscripción', detalle: 'Media Maratón Patagónica', monto: 35000, vencimiento: '2026-10-30', estado: 'pendiente' },
-    { id: 'p3', atletaId: 'tomas-ferreyra', concepto: 'Cuota', detalle: 'Cuota octubre (menores)', monto: 22000, vencimiento: '2026-10-10', estado: 'vencido' },
-    { id: 'p4', atletaId: 'tomas-ferreyra', concepto: 'Indumentaria', detalle: 'Musculosa oficial Willilefche', monto: 18500, vencimiento: '2026-10-25', estado: 'pendiente' },
-    { id: 'p5', atletaId: 'graciela-paz', concepto: 'Cuota', detalle: 'Cuota octubre', monto: 28000, vencimiento: '2026-10-10', estado: 'pagado', fechaPago: '2026-10-08' },
-    { id: 'p6', atletaId: 'graciela-paz', concepto: 'Viaje', detalle: 'Traslado Trail Somuncurá', monto: 15000, vencimiento: '2026-11-20', estado: 'pendiente' },
-    { id: 'p7', atletaId: 'diego-alvarez', concepto: 'Cuota', detalle: 'Cuota septiembre', monto: 26000, vencimiento: '2026-09-10', estado: 'vencido' },
-    { id: 'p8', atletaId: 'diego-alvarez', concepto: 'Cuota', detalle: 'Cuota octubre', monto: 28000, vencimiento: '2026-10-10', estado: 'vencido' },
-    { id: 'p9', atletaId: 'sofia-benitez', concepto: 'Cuota', detalle: 'Cuota octubre (menores)', monto: 22000, vencimiento: '2026-10-10', estado: 'pagado', fechaPago: '2026-10-02' },
-    { id: 'p10', atletaId: 'ramiro-quiroga', concepto: 'Cuota', detalle: 'Cuota octubre', monto: 28000, vencimiento: '2026-10-10', estado: 'pagado', fechaPago: '2026-10-09' },
-    { id: 'p11', atletaId: 'ramiro-quiroga', concepto: 'Inscripción', detalle: '10K Nocturna de la Costanera', monto: 24000, vencimiento: '2026-11-01', estado: 'pendiente' },
-    { id: 'p12', atletaId: 'lucia-gomez', concepto: 'Cuota', detalle: 'Cuota septiembre', monto: 26000, vencimiento: '2026-09-10', estado: 'pagado', fechaPago: '2026-09-07' },
-  ],
-  avisos: [
-    { id: 'a1', tipo: 'Entrenamiento', titulo: 'Cambio de sede el viernes', cuerpo: 'Por el evento municipal, el fartlek del viernes 16 se hace en el circuito del Arroyo a las 19 h.', fecha: '2026-10-15', destinatarios: 'Todo el grupo', leidos: 14, total: 18 },
-    { id: 'a2', tipo: 'Competencia', titulo: 'Inscripciones Media Patagónica', cuerpo: 'Cierran el 30/10. Quienes vayan a correr, avisen para gestionar la inscripción grupal con descuento.', fecha: '2026-10-12', destinatarios: 'Mayores y Master', leidos: 9, total: 12 },
-    { id: 'a3', tipo: 'General', titulo: 'Nueva indumentaria Willilefche', cuerpo: 'Ya llegaron las musculosas y camperas de la escuela. Se retiran los martes en la pista.', fecha: '2026-10-07', destinatarios: 'Todo el grupo', leidos: 17, total: 18 },
-  ],
+  planes: {},
+  competencias: [],
+  pagos: [],
+  avisos: [],
+  mensajes: {},
 };
 
+/* ---------- Limpieza de campos undefined para Firestore ---------- */
 function sanitizeForFirestore(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
 
-function loadLocalDB() {
+function isDummyData(dbObj) {
+  if (!dbObj || !Array.isArray(dbObj.atletas)) return true;
+  if (dbObj.equipo && dbObj.equipo.entrenador === 'Prof. Martín Ríos') return true;
+  if (dbObj.atletas.some((a) => a.id === 'lucia-gomez' || a.id === 'tomas-ferreyra')) return true;
+  return false;
+}
+
+/* ---------- Carga Inicial (Cache-First) ---------- */
+function loadDB() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      // Asegurar que cada atleta tenga usuario y password por defecto si venía de v1
-      if (Array.isArray(parsed.atletas)) {
-        parsed.atletas.forEach((a) => {
-          if (!a.usuario) a.usuario = a.id.split('-')[0];
-          if (!a.password) a.password = '123';
-          if (a.tutor && !a.tutor.usuario) {
-            a.tutor.usuario = `familia.${a.usuario}`;
-            a.tutor.password = '123';
-          }
-        });
+      if (parsed && Array.isArray(parsed.atletas) && !isDummyData(parsed)) {
+        // Asegurar credenciales y estructura del equipo actualizadas
+        parsed.equipo = {
+          ...INITIAL_DB.equipo,
+          ...(parsed.equipo || {}),
+          adminUser: parsed.equipo?.adminUser || 'admin',
+          adminPass: parsed.equipo?.adminPass || 'Admin123@',
+          entrenador: parsed.equipo?.entrenador || 'Cristian Javier Torres',
+          entrenadorDni: parsed.equipo?.entrenadorDni || '27.884.821',
+          entrenadorFechaNacimiento: parsed.equipo?.entrenadorFechaNacimiento || '1980-07-02',
+          coachUser: parsed.equipo?.coachUser || 'cristian.torres',
+          coachPass: parsed.equipo?.coachPass || '27884821',
+        };
+        parsed.hoy = getTodayISO();
+        parsed.semanaActual = getCurrentWeekISO(parsed.hoy);
+        return parsed;
       }
-      if (parsed.equipo && !parsed.equipo.adminUser) {
-        parsed.equipo.adminUser = 'entrenador';
-        parsed.equipo.adminPass = 'willilefche2026';
-      }
-      return parsed;
     }
   } catch (e) {
-    console.warn('Error leyendo caché local:', e);
+    console.warn('Error leyendo localStorage:', e);
   }
-  return JSON.parse(JSON.stringify(INITIAL_DB));
+  const fresh = JSON.parse(JSON.stringify(INITIAL_DB));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
+  } catch (e) {}
+  return fresh;
 }
 
-window.DB = loadLocalDB();
+window.DB = loadDB();
 
-/* ---------- Motor de Sincronización con Firebase Firestore ---------- */
+/* ---------- Motor de Sincronización Firebase Firestore ---------- */
 const CloudSync = {
   firestore: null,
   status: 'local', // 'local' | 'connecting' | 'online' | 'error'
-  statusText: 'Modo Local',
+  statusText: 'Modo Local (Sin nube)',
   _unsubscribe: null,
   _ignoreNextSnapshot: false,
 
-  getActiveConfig() {
+  getActiveFirebaseConfig() {
     try {
-      const custom = localStorage.getItem(CUSTOM_FB_CONFIG_KEY);
-      if (custom) {
-        const parsed = JSON.parse(custom);
-        if (parsed && parsed.apiKey && parsed.apiKey !== 'TU_API_KEY') {
+      const customRaw = localStorage.getItem(CUSTOM_FB_CONFIG_KEY);
+      if (customRaw) {
+        const parsed = JSON.parse(customRaw);
+        if (parsed && parsed.apiKey && parsed.projectId) {
+          if (!parsed.databaseId) parsed.databaseId = (window.firebaseConfig && window.firebaseConfig.databaseId) || 'default';
           return parsed;
         }
       }
     } catch (e) {}
-    if (window.firebaseConfig && window.firebaseConfig.apiKey && window.firebaseConfig.apiKey !== 'TU_API_KEY') {
-      return window.firebaseConfig;
-    }
-    return null;
+    return window.firebaseConfig || null;
+  },
+
+  isConfigValid(cfg) {
+    return Boolean(
+      cfg &&
+        cfg.apiKey &&
+        cfg.projectId &&
+        !String(cfg.apiKey).includes('PEGAR_AQUI') &&
+        String(cfg.apiKey).length > 10
+    );
   },
 
   init() {
-    const config = this.getActiveConfig();
-    if (!config) {
-      this.setStatus('local', 'Modo Local (Firebase pendiente)');
+    const cfg = this.getActiveFirebaseConfig();
+    if (!this.isConfigValid(cfg)) {
+      this.setStatus('local', 'Modo Local · Falta configurar Firebase');
       return;
     }
 
-    if (!window.firebase || !window.firebase.initializeApp) {
-      this.setStatus('error', 'Sin conexión a Internet');
+    if (!window.firebase || !window.firebase.firestore) {
+      this.setStatus('error', 'SDK de Firebase no disponible');
       return;
     }
-
-    this.setStatus('connecting', 'Conectando a Firebase…');
 
     try {
-      let app;
-      if (window.firebase.apps && window.firebase.apps.length > 0) {
-        app = window.firebase.app();
-      } else {
-        app = window.firebase.initializeApp(config);
+      this.setStatus('connecting', 'Conectando a Firebase…');
+      if (!window.firebase.apps.length) {
+        window.firebase.initializeApp(cfg);
+      }
+      this.firestore = window.firebase.firestore();
+      const targetDbId = cfg.databaseId || 'default';
+      if (this.firestore && this.firestore._delegate && this.firestore._delegate._databaseId) {
+        this.firestore._delegate._databaseId.database = targetDbId;
       }
 
-      this.firestore = window.firebase.firestore(app);
-
-      // Activar persistencia offline de Firestore
+      // Habilitar persistencia offline de Firestore
       this.firestore
         .enablePersistence({ synchronizeTabs: true })
-        .catch((err) => {
-          console.warn('Persistencia Firestore:', err.code);
-        });
+        .catch(() => {});
 
       const docRef = this.firestore.collection('willilefche').doc('main_db');
 
-      // Escuchar cambios en tiempo real desde la nube
       this._unsubscribe = docRef.onSnapshot(
-        (docSnap) => {
-          this.setStatus('online', 'Sincronizado en Nube');
+        (snapshot) => {
           if (this._ignoreNextSnapshot) {
             this._ignoreNextSnapshot = false;
+            this.setStatus('online', 'Sincronizado en vivo');
             return;
           }
-          if (docSnap.exists) {
-            const cloudData = docSnap.data();
+
+          if (snapshot.exists) {
+            const cloudData = snapshot.data();
+            // Si en la nube habían quedado datos de prueba viejos, migrar automáticamente los datos reales
+            if (isDummyData(cloudData)) {
+              console.log('Migrando Nómina Inicial real a Firebase Firestore...');
+              this.pushToCloud();
+              return;
+            }
             if (cloudData && Array.isArray(cloudData.atletas)) {
               window.DB = cloudData;
+              window.DB.hoy = getTodayISO();
+              window.DB.semanaActual = getCurrentWeekISO(window.DB.hoy);
               try {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(window.DB));
               } catch (e) {}
-              if (window.renderApp) window.renderApp(true);
+              this.setStatus('online', 'Sincronizado en vivo');
+              if (typeof window.renderApp === 'function') {
+                window.renderApp(true);
+              }
             }
           } else {
-            // Primera vez que se conecta: subir la base local a Firestore
+            // Primera vez que se conecta el proyecto Firebase: subir Nómina Inicial real automáticamente
             this.pushToCloud();
           }
         },
         (err) => {
           console.error('Error en suscripción Firestore:', err);
           if (err.code === 'permission-denied') {
-            this.setStatus('error', 'Falta publicar Reglas en Firestore');
+            this.setStatus('error', 'Permiso denegado (Revisar Reglas Firestore)');
+          } else if (err.code === 'not-found' || (err.message && err.message.includes('does not exist'))) {
+            this.setStatus('error', 'Falta crear Firestore Database en consola');
           } else {
-            this.setStatus('error', 'Error de conexión nube');
+            this.setStatus('error', 'Sin conexión (Guardando en caché local)');
           }
         }
       );
-    } catch (e) {
-      console.error('Error inicializando Firebase:', e);
-      this.setStatus('error', 'Error en credenciales Firebase');
+    } catch (err) {
+      console.error('Error inicializando Firebase:', err);
+      this.setStatus('error', 'Error de configuración Firebase');
     }
   },
 
   setStatus(status, text) {
     this.status = status;
     this.statusText = text;
-    document.querySelectorAll('[data-cloud-badge]').forEach((el) => {
-      el.innerHTML = this.renderBadgeHtml();
+    const badges = document.querySelectorAll('[data-cloud-badge]');
+    badges.forEach((b) => {
+      b.innerHTML = this.renderBadgeHtml();
     });
   },
 
   renderBadgeHtml() {
-    const colors = {
-      online: 'bg-success-soft text-success border-success/30',
-      connecting: 'bg-warning-soft text-warning-text border-warning/30',
-      local: 'bg-muted text-muted-foreground border-border',
-      error: 'bg-destructive/10 text-destructive border-destructive/30',
+    const map = {
+      online: ['bg-success-soft text-success border-success/30', '●'],
+      connecting: ['bg-warning-soft text-warning-text border-warning/30', '◌'],
+      error: ['bg-destructive/15 text-destructive border-destructive/30', '▲'],
+      local: ['bg-muted text-muted-foreground border-border', '○'],
     };
-    const dotColors = {
-      online: 'bg-success',
-      connecting: 'bg-warning animate-pulse',
-      local: 'bg-muted-foreground',
-      error: 'bg-destructive',
-    };
-    const cls = colors[this.status] || colors.local;
-    const dot = dotColors[this.status] || dotColors.local;
+    const [cls, dot] = map[this.status] || map.local;
     return `
       <button
         type="button"
         onclick="openCloudConfigModal()"
-        title="Configurar Firebase y Copias de Seguridad"
-        class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-opacity hover:opacity-85 ${cls}"
+        title="Estado de la base de datos y copias de seguridad"
+        class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-opacity hover:opacity-85 ${cls}"
       >
-        <span class="size-2 rounded-full ${dot}"></span>
+        <span>${dot}</span>
         <span>${this.statusText}</span>
       </button>
     `;
@@ -506,9 +781,61 @@ const CloudSync = {
     if (!this.firestore) return false;
     try {
       this._ignoreNextSnapshot = true;
+      window.DB.appKey = 'WLF-VALCHETA-2026';
       window.DB.updatedAt = Date.now();
       const cleanData = sanitizeForFirestore(window.DB);
       await this.firestore.collection('willilefche').doc('main_db').set(cleanData);
+
+      // También sincronizar colección individual de atletas/usuarios para consultas directas en Firebase
+      try {
+        const batch = this.firestore.batch();
+        const usersCol = this.firestore.collection('willilefche_usuarios');
+        // Admin
+        batch.set(usersCol.doc('admin'), {
+          appKey: 'WLF-VALCHETA-2026',
+          id: 'admin',
+          usuario: window.DB.equipo.adminUser || 'admin',
+          password: window.DB.equipo.adminPass || 'Admin123@',
+          role: 'admin',
+          nombre: 'Administrador',
+          updatedAt: window.DB.updatedAt,
+        });
+        // Entrenador (Fila 19)
+        batch.set(usersCol.doc('entrenador_cristian_torres'), {
+          appKey: 'WLF-VALCHETA-2026',
+          id: 'entrenador_cristian_torres',
+          nroNomina: 19,
+          usuario: window.DB.equipo.coachUser || 'cristian.torres',
+          password: window.DB.equipo.coachPass || '27884821',
+          role: 'coach',
+          nombre: window.DB.equipo.entrenador || 'Cristian Javier Torres',
+          dni: window.DB.equipo.entrenadorDni || '27.884.821',
+          fechaNacimiento: window.DB.equipo.entrenadorFechaNacimiento || '1980-07-02',
+          updatedAt: window.DB.updatedAt,
+        });
+        // Atletas
+        (window.DB.atletas || []).forEach((a) => {
+          batch.set(usersCol.doc(a.id), {
+            appKey: 'WLF-VALCHETA-2026',
+            id: a.id,
+            nroNomina: a.nroNomina || null,
+            nombre: a.nombre,
+            apellido: a.apellido,
+            dni: a.dni || '',
+            fechaNacimiento: a.fechaNacimiento || '',
+            categoria: a.categoria || '',
+            usuario: a.usuario,
+            password: a.password,
+            role: 'athlete',
+            tutor: a.tutor || null,
+            updatedAt: window.DB.updatedAt,
+          });
+        });
+        await batch.commit();
+      } catch (subErr) {
+        console.warn('Aviso al sincronizar colección secundaria:', subErr);
+      }
+
       this.setStatus('online', 'Sincronizado en Nube');
       return true;
     } catch (e) {
@@ -599,10 +926,21 @@ window.Helpers = {
   edad(fechaNacimiento, hoy = window.DB.hoy) {
     if (!fechaNacimiento) return 0;
     const [y, m, d] = fechaNacimiento.split('-').map(Number);
-    const [hy, hm, hd] = hoy.split('-').map(Number);
+    const [hy, hm, hd] = (hoy || getTodayISO()).split('-').map(Number);
     let e = hy - y;
     if (hm < m || (hm === m && hd < d)) e--;
     return e;
+  },
+  calcularCategoria(fechaNacimiento, hoy = window.DB.hoy) {
+    const e = this.edad(fechaNacimiento, hoy);
+    if (e <= 11) return 'U12';
+    if (e <= 13) return 'U14';
+    if (e <= 15) return 'U16';
+    if (e <= 17) return 'U18';
+    if (e <= 19) return 'U20';
+    if (e <= 34) return 'Mayores';
+    if (e <= 44) return 'Master A';
+    return 'Master B';
   },
   deudaDe(atletaId) {
     return this.getPagos(atletaId)
@@ -648,6 +986,7 @@ window.Helpers = {
   },
   rankingPublico(distancia) {
     return window.DB.atletas
+      .filter((a) => !a.excluirRanking)
       .flatMap((a) =>
         (a.marcas || [])
           .filter((m) => m.distancia === distancia)
