@@ -815,15 +815,13 @@ const CloudSync = {
     };
     const [cls, dot] = map[this.status] || map.local;
     return `
-      <button
-        type="button"
-        onclick="openCloudConfigModal()"
-        title="Estado de la base de datos y copias de seguridad"
-        class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-opacity hover:opacity-85 ${cls}"
+      <span
+        title="Estado de sincronización de la base de datos"
+        class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold select-none ${cls}"
       >
         <span>${dot}</span>
         <span>${this.statusText}</span>
-      </button>
+      </span>
     `;
   },
 
@@ -910,6 +908,8 @@ function saveDB() {
 }
 
 function resetDB() {
+  const s = window.Auth && typeof window.Auth.getSession === 'function' ? window.Auth.getSession() : null;
+  if (!s || s.subRole !== 'admin') return;
   window.DB = JSON.parse(JSON.stringify(INITIAL_DB));
   saveDB();
 }
@@ -917,8 +917,13 @@ function resetDB() {
 window.saveDB = saveDB;
 window.resetDB = resetDB;
 
-/* ---------- Funciones de Backup (Exportar / Importar JSON) ---------- */
+/* ---------- Funciones de Backup (Exportar / Importar JSON - Exclusivo Admin) ---------- */
 window.exportBackupJSON = () => {
+  const s = window.Auth && typeof window.Auth.getSession === 'function' ? window.Auth.getSession() : null;
+  if (!s || s.subRole !== 'admin') {
+    if (window.showToast) window.showToast('Acceso restringido al Administrador', 'info');
+    return;
+  }
   const dataStr = JSON.stringify(window.DB, null, 2);
   const blob = new Blob([dataStr], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -933,6 +938,11 @@ window.exportBackupJSON = () => {
 };
 
 window.importBackupJSON = (fileInput) => {
+  const s = window.Auth && typeof window.Auth.getSession === 'function' ? window.Auth.getSession() : null;
+  if (!s || s.subRole !== 'admin') {
+    if (window.showToast) window.showToast('Acceso restringido al Administrador', 'info');
+    return;
+  }
   const file = fileInput.files && fileInput.files[0];
   if (!file) return;
   const reader = new FileReader();

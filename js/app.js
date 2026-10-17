@@ -783,7 +783,6 @@ function viewIngresar() {
 
           <div class="mt-6 flex items-center justify-between text-xs text-muted-foreground">
             <a href="#/" class="hover:text-foreground">← Volver al inicio</a>
-            <button type="button" onclick="openCloudConfigModal()" class="hover:text-primary underline">Conexión Nube / Backups</button>
           </div>
         </div>
       </div>
@@ -811,6 +810,8 @@ window.handleLoginSubmit = (e) => {
    ========================================================================== */
 
 function renderCoachShell(activeSection, contentHtml) {
+  const session = Auth.getSession();
+  const isAdmin = Boolean(session && session.subRole === 'admin');
   const navItems = [
     { to: '#/entrenador', id: 'panel', label: 'Panel', icon: 'layout-dashboard' },
     { to: '#/entrenador/atletas', id: 'atletas', label: 'Atletas', icon: 'users' },
@@ -844,8 +845,8 @@ function renderCoachShell(activeSection, contentHtml) {
       <div data-cloud-badge>${CloudSync.renderBadgeHtml()}</div>
       <div class="flex items-center gap-3">
         <div class="min-w-0 flex-1">
-          <p class="truncate text-sm font-semibold text-sidebar-foreground">${esc(DB.equipo.entrenador)}</p>
-          <p class="text-xs text-sidebar-foreground/60">Entrenador · Administrador</p>
+          <p class="truncate text-sm font-semibold text-sidebar-foreground">${esc(isAdmin ? 'Administrador General' : DB.equipo.entrenador)}</p>
+          <p class="text-xs text-sidebar-foreground/60">${isAdmin ? 'Administrador del Sistema' : 'Entrenador'}</p>
         </div>
         <button
           type="button"
@@ -865,14 +866,18 @@ function renderCoachShell(activeSection, contentHtml) {
         ${renderLogo({ invert: true })}
         <nav class="flex flex-1 flex-col gap-1" aria-label="Secciones">
           ${navHtml}
-          <button
-            type="button"
-            onclick="openCloudConfigModal()"
-            class="mt-4 flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          >
-            <i data-lucide="database" class="size-5"></i>
-            Nube y Backups
-          </button>
+          ${
+            isAdmin
+              ? `<button
+                  type="button"
+                  onclick="openCloudConfigModal()"
+                  class="mt-4 flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                >
+                  <i data-lucide="database" class="size-5"></i>
+                  Nube y Backups (Admin)
+                </button>`
+              : ''
+          }
         </nav>
         ${userFooter}
       </aside>
@@ -880,9 +885,13 @@ function renderCoachShell(activeSection, contentHtml) {
       <header class="sticky top-0 z-30 flex h-14 items-center justify-between bg-sidebar px-4 lg:hidden">
         ${renderLogo({ invert: true, className: 'text-xl' })}
         <div class="flex items-center gap-2">
-          <button type="button" onclick="openCloudConfigModal()" class="grid size-9 place-items-center rounded-md text-sidebar-foreground hover:bg-sidebar-accent">
-            <i data-lucide="database" class="size-4"></i>
-          </button>
+          ${
+            isAdmin
+              ? `<button type="button" onclick="openCloudConfigModal()" class="grid size-9 place-items-center rounded-md text-sidebar-foreground hover:bg-sidebar-accent">
+                  <i data-lucide="database" class="size-4"></i>
+                </button>`
+              : ''
+          }
           <button type="button" onclick="toggleMobileMenu()" class="grid size-9 place-items-center rounded-md text-sidebar-foreground hover:bg-sidebar-accent">
             <i data-lucide="menu" class="size-5"></i>
           </button>
@@ -983,10 +992,10 @@ function viewCoachDashboard() {
   ];
 
   const session = Auth.getSession();
-  const saludoNombre =
-    session?.subRole === 'admin'
-      ? 'Administrador'
-      : `Prof. ${DB.equipo.entrenador || 'Cristian Javier Torres'}`;
+  const isAdmin = Boolean(session && session.subRole === 'admin');
+  const saludoNombre = isAdmin
+    ? 'Administrador'
+    : `Prof. ${DB.equipo.entrenador || 'Cristian Javier Torres'}`;
 
   const content = `
     ${renderPageHeader(
@@ -994,11 +1003,15 @@ function viewCoachDashboard() {
       `Fecha actual: ${Helpers.fechaCorta(DB.hoy)} · Entrenador: ${DB.equipo.entrenador} (DNI ${DB.equipo.entrenadorDni || '27.884.821'})`,
       `
         <button type="button" onclick="openNominaCredencialesModal()" class="inline-flex items-center gap-2 rounded-lg border bg-card px-3.5 py-2 text-sm font-medium hover:bg-muted">
-          <i data-lucide="key-round" class="size-4 text-primary"></i> Nómina y Accesos
+          <i data-lucide="key-round" class="size-4 text-primary"></i> Nómina de Atletas
         </button>
-        <button type="button" onclick="openCloudConfigModal()" class="inline-flex items-center gap-2 rounded-lg border bg-card px-3.5 py-2 text-sm font-medium hover:bg-muted">
-          <i data-lucide="database" class="size-4 text-primary"></i> Nube / Backup
-        </button>
+        ${
+          isAdmin
+            ? `<button type="button" onclick="openCloudConfigModal()" class="inline-flex items-center gap-2 rounded-lg border bg-card px-3.5 py-2 text-sm font-medium hover:bg-muted">
+                <i data-lucide="database" class="size-4 text-primary"></i> Nube / Backup (Admin)
+              </button>`
+            : ''
+        }
         <a href="#/entrenador/avisos" class="inline-flex items-center gap-2 rounded-lg border bg-card px-4 py-2 text-sm font-medium hover:bg-muted">
           <i data-lucide="message-square" class="size-4"></i> Enviar aviso
         </a>
@@ -3627,8 +3640,13 @@ window.deleteObjetivo = (atletaId, objId) => {
   renderApp();
 };
 
-// Modal con la Tabla Completa de la Nómina Oficial y Credenciales de Acceso
+// Modal con la Tabla Completa de la Nómina Oficial y Credenciales de Acceso (Solo Entrenador/Admin autenticado)
 window.openNominaCredencialesModal = () => {
+  const session = Auth.getSession();
+  if (!session || session.role !== 'coach') {
+    showToast('Debés iniciar sesión como Entrenador o Administrador', 'info');
+    return;
+  }
   const eq = DB.equipo || {};
   showModalHtml(
     `
@@ -3700,17 +3718,20 @@ window.openNominaCredencialesModal = () => {
   );
 };
 
-// Modal de Configuración de Firebase, Credenciales de Admin y Backups JSON
+// Modal de Configuración de Firebase, Credenciales de Admin y Backups JSON (EXCLUSIVO ADMINISTRADOR AUTENTICADO)
 window.openCloudConfigModal = () => {
-  const activeCfg = CloudSync.getActiveFirebaseConfig() || window.firebaseConfig || {};
   const session = Auth.getSession();
-  const isCoach = !session || session.role === 'coach';
+  if (!session || session.subRole !== 'admin') {
+    showToast('Acceso restringido exclusivamente al Administrador', 'info');
+    return;
+  }
+  const activeCfg = CloudSync.getActiveFirebaseConfig() || window.firebaseConfig || {};
 
   showModalHtml(
     `
     <div class="flex items-start justify-between">
       <div>
-        <h2 class="text-xl font-bold">Nube Firebase, Copias de Seguridad y Accesos</h2>
+        <h2 class="text-xl font-bold">Panel Exclusivo de Administrador</h2>
         <p class="text-sm text-muted-foreground">Estado actual: <strong>${esc(CloudSync.statusText)}</strong></p>
       </div>
       <button type="button" onclick="closeModal()" class="text-muted-foreground hover:text-foreground">✕</button>
@@ -3731,84 +3752,66 @@ window.openCloudConfigModal = () => {
         </div>
       </div>
 
-      ${
-        isCoach
-          ? `<form onsubmit="saveFirebaseConfigFromUI(event)" class="rounded-xl border bg-card p-4 space-y-3">
-              <p class="text-sm font-bold">2. Conexión y Migración a Firebase Firestore</p>
-              <p class="text-xs text-muted-foreground">Podés pegar directamente el bloque <code class="font-mono">firebaseConfig</code> completo abajo o completar los campos:</p>
-              <div>
-                <label class="text-xs font-medium">Pegar bloque firebaseConfig completo (opcional, autocompleta los campos)</label>
-                <textarea
-                  id="fb-raw-paste"
-                  rows="3"
-                  oninput="parsePastedFirebaseConfig(this.value)"
-                  placeholder="Pegá acá el código const firebaseConfig = { apiKey: '...', projectId: '...' };"
-                  class="mt-1 w-full rounded-lg border bg-muted/30 p-2.5 text-xs font-mono"
-                ></textarea>
-              </div>
-              <div class="grid grid-cols-2 gap-2.5">
-                <div class="col-span-2">
-                  <label class="text-xs font-medium">apiKey</label>
-                  <input id="fb-apikey" required value="${esc(activeCfg.apiKey && !String(activeCfg.apiKey).includes('PEGAR_AQUI') ? activeCfg.apiKey : '')}" placeholder="AIzaSy..." class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
-                </div>
-                <div>
-                  <label class="text-xs font-medium">projectId</label>
-                  <input id="fb-proj" required value="${esc(activeCfg.projectId && !String(activeCfg.projectId).includes('PEGAR_AQUI') ? activeCfg.projectId : '')}" placeholder="willilefche-valcheta" class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
-                </div>
-                <div>
-                  <label class="text-xs font-medium">appId</label>
-                  <input id="fb-appid" value="${esc(activeCfg.appId && !String(activeCfg.appId).includes('PEGAR_AQUI') ? activeCfg.appId : '')}" placeholder="1:0000:web:0000" class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
-                </div>
-              </div>
-              <div class="flex flex-wrap justify-between items-center gap-2 pt-1">
-                <button type="button" onclick="CloudSync.pushToCloud().then(ok => showToast(ok ? '¡Nómina migrada y sincronizada en Firebase!' : 'Revisá las credenciales o reglas de Firestore', ok ? 'success' : 'info'))" class="text-xs font-semibold text-primary hover:underline">
-                  Migrar / Forzar subida a Firebase ahora
-                </button>
-                <button type="submit" class="rounded-lg bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-95">
-                  Guardar y Conectar Firebase
-                </button>
-              </div>
-            </form>
+      <form onsubmit="saveFirebaseConfigFromUI(event)" class="rounded-xl border bg-card p-4 space-y-3">
+        <p class="text-sm font-bold">2. Conexión y Migración a Firebase Firestore</p>
+        <div class="grid grid-cols-2 gap-2.5">
+          <div class="col-span-2">
+            <label class="text-xs font-medium">apiKey (Oculta por seguridad)</label>
+            <input id="fb-apikey" type="password" required value="${esc(activeCfg.apiKey && !String(activeCfg.apiKey).includes('PEGAR_AQUI') ? activeCfg.apiKey : '')}" placeholder="AIzaSy..." class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
+          </div>
+          <div>
+            <label class="text-xs font-medium">projectId</label>
+            <input id="fb-proj" required value="${esc(activeCfg.projectId && !String(activeCfg.projectId).includes('PEGAR_AQUI') ? activeCfg.projectId : '')}" placeholder="willilefche-valcheta" class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
+          </div>
+          <div>
+            <label class="text-xs font-medium">appId</label>
+            <input id="fb-appid" type="password" value="${esc(activeCfg.appId && !String(activeCfg.appId).includes('PEGAR_AQUI') ? activeCfg.appId : '')}" placeholder="1:0000:web:0000" class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
+          </div>
+        </div>
+        <div class="flex flex-wrap justify-between items-center gap-2 pt-1">
+          <button type="button" onclick="CloudSync.pushToCloud().then(ok => showToast(ok ? '¡Nómina sincronizada en Firebase!' : 'Revisá las credenciales de Firestore', ok ? 'success' : 'info'))" class="text-xs font-semibold text-primary hover:underline">
+            Forzar sincronización con Firebase ahora
+          </button>
+          <button type="submit" class="rounded-lg bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-95">
+            Guardar configuración Firebase
+          </button>
+        </div>
+      </form>
 
-            <form onsubmit="saveAdminProfile(event)" class="rounded-xl border bg-card p-4 space-y-3">
-              <p class="text-sm font-bold">3. Credenciales de Administrador y Entrenador</p>
-              <div class="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label class="text-xs font-medium">Usuario Administrador</label>
-                  <input id="adm-user" required value="${esc(DB.equipo.adminUser || 'admin')}" class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
-                </div>
-                <div>
-                  <label class="text-xs font-medium">Contraseña Administrador</label>
-                  <input id="adm-pass" required value="${esc(DB.equipo.adminPass || 'Admin123@')}" class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
-                </div>
-                <div>
-                  <label class="text-xs font-medium">Nombre Entrenador (N.º 19)</label>
-                  <input id="adm-nombre" required value="${esc(DB.equipo.entrenador || 'Cristian Javier Torres')}" class="h-9 w-full rounded-lg border bg-card px-3 text-xs" />
-                </div>
-                <div>
-                  <label class="text-xs font-medium">DNI Entrenador</label>
-                  <input id="adm-dni" required value="${esc(DB.equipo.entrenadorDni || '27.884.821')}" class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
-                </div>
-                <div>
-                  <label class="text-xs font-medium">Usuario Entrenador</label>
-                  <input id="adm-coach-user" required value="${esc(DB.equipo.coachUser || 'cristian.torres')}" class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
-                </div>
-                <div>
-                  <label class="text-xs font-medium">Contraseña Entrenador</label>
-                  <input id="adm-coach-pass" required value="${esc(DB.equipo.coachPass || '27884821')}" class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
-                </div>
-              </div>
-              <div class="flex justify-between items-center pt-1">
-                <button type="button" onclick="if(confirm('¿Restaurar la Nómina Inicial original de 16 atletas y entrenador?')){resetDB(); closeModal(); renderApp(); showToast('Nómina Inicial restaurada');}" class="text-xs text-destructive hover:underline">
-                  Restaurar Nómina Inicial original
-                </button>
-                <button type="submit" class="rounded-lg bg-secondary px-3.5 py-1.5 text-xs font-semibold text-secondary-foreground hover:opacity-90">
-                  Guardar accesos
-                </button>
-              </div>
-            </form>`
-          : ''
-      }
+      <form onsubmit="saveAdminProfile(event)" class="rounded-xl border bg-card p-4 space-y-3">
+        <p class="text-sm font-bold">3. Credenciales de Administrador y Entrenador</p>
+        <div class="grid grid-cols-2 gap-2.5">
+          <div>
+            <label class="text-xs font-medium">Usuario Administrador</label>
+            <input id="adm-user" required value="${esc(DB.equipo.adminUser || 'admin')}" class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
+          </div>
+          <div>
+            <label class="text-xs font-medium">Contraseña Administrador</label>
+            <input id="adm-pass" type="password" required value="${esc(DB.equipo.adminPass || 'Admin123@')}" class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
+          </div>
+          <div>
+            <label class="text-xs font-medium">Nombre Entrenador (N.º 19)</label>
+            <input id="adm-nombre" required value="${esc(DB.equipo.entrenador || 'Cristian Javier Torres')}" class="h-9 w-full rounded-lg border bg-card px-3 text-xs" />
+          </div>
+          <div>
+            <label class="text-xs font-medium">DNI Entrenador</label>
+            <input id="adm-dni" required value="${esc(DB.equipo.entrenadorDni || '27.884.821')}" class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
+          </div>
+          <div>
+            <label class="text-xs font-medium">Usuario Entrenador</label>
+            <input id="adm-coach-user" required value="${esc(DB.equipo.coachUser || 'cristian.torres')}" class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
+          </div>
+          <div>
+            <label class="text-xs font-medium">Contraseña Entrenador</label>
+            <input id="adm-coach-pass" type="password" required value="${esc(DB.equipo.coachPass || '27884821')}" class="h-9 w-full rounded-lg border bg-card px-3 text-xs font-mono" />
+          </div>
+        </div>
+        <div class="flex justify-end items-center pt-1">
+          <button type="submit" class="rounded-lg bg-secondary px-3.5 py-1.5 text-xs font-semibold text-secondary-foreground hover:opacity-90">
+            Guardar accesos
+          </button>
+        </div>
+      </form>
     </div>
   `,
     'max-w-xl'
@@ -3816,6 +3819,8 @@ window.openCloudConfigModal = () => {
 };
 
 window.parsePastedFirebaseConfig = (rawText) => {
+  const s = Auth.getSession();
+  if (!s || s.subRole !== 'admin') return;
   if (!rawText) return;
   const extract = (key) => {
     const m = rawText.match(new RegExp(key + '\\s*:\\s*["\']([^"\']+)["\']'));
@@ -3831,6 +3836,8 @@ window.parsePastedFirebaseConfig = (rawText) => {
 
 window.saveFirebaseConfigFromUI = (e) => {
   e.preventDefault();
+  const s = Auth.getSession();
+  if (!s || s.subRole !== 'admin') return;
   const apiKey = document.getElementById('fb-apikey').value.trim();
   const projectId = document.getElementById('fb-proj').value.trim();
   const appId = document.getElementById('fb-appid').value.trim();
@@ -3844,12 +3851,14 @@ window.saveFirebaseConfigFromUI = (e) => {
   };
   localStorage.setItem('willilefche_firebase_config', JSON.stringify(cfg));
   closeModal();
-  showToast('Configuración de Firebase guardada. Conectando y migrando datos…');
+  showToast('Configuración de Firebase guardada.');
   setTimeout(() => location.reload(), 600);
 };
 
 window.saveAdminProfile = (e) => {
   e.preventDefault();
+  const s = Auth.getSession();
+  if (!s || s.subRole !== 'admin') return;
   DB.equipo.adminUser = document.getElementById('adm-user').value.trim().toLowerCase();
   DB.equipo.adminPass = document.getElementById('adm-pass').value.trim();
   DB.equipo.entrenador = document.getElementById('adm-nombre').value.trim();
