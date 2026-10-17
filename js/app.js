@@ -1272,28 +1272,7 @@ function viewCoachAtletaFicha(atletaId) {
             <h3 class="text-xl font-bold">Evolución</h3>
             <div class="mt-3">${renderPaceChart(atleta.evolucion)}</div>
           </div>
-          <div class="rounded-xl border bg-card p-5">
-            <h3 class="text-xl font-bold">Objetivos</h3>
-            ${
-              (atleta.objetivos || []).length === 0
-                ? `<p class="mt-2 text-sm text-muted-foreground">Sin objetivos específicos cargados aún.</p>`
-                : `<ul class="mt-3 space-y-4">
-                    ${(atleta.objetivos || [])
-                      .map(
-                        (o) => `
-                      <li>
-                        <p class="text-sm font-medium">${esc(o.texto)}</p>
-                        <p class="text-xs text-muted-foreground">Meta: ${Helpers.fechaCorta(o.fecha)}</p>
-                        <div class="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                          <div class="h-full bg-primary" style="width: ${o.progreso}%"></div>
-                        </div>
-                      </li>
-                    `
-                      )
-                      .join('')}
-                  </ul>`
-            }
-          </div>
+          ${renderObjetivosCard(atleta, true)}
         </aside>
       </div>
     `;
@@ -1563,25 +1542,48 @@ function viewCoachAtletaFicha(atletaId) {
       </section>
     `;
   } else if (State.fichaTab === 'mensajes') {
+    const msgsIndiv = DB.avisos.filter(
+      (av) =>
+        av.tipo === 'Individual' &&
+        (av.atletaId === atleta.id || av.destinatarios === Helpers.nombreCompleto(atleta))
+    );
     tabContent = `
-      <section class="max-w-reading rounded-xl border bg-card p-5">
-        <h2 class="text-2xl font-bold">Mensaje individual</h2>
-        <p class="text-sm text-muted-foreground">
-          Solo lo verá ${esc(atleta.nombre)}${atleta.tutor ? ` y su familia (${esc(atleta.tutor.nombre)})` : ''}.
-        </p>
-        <form onsubmit="enviarMensajeIndividual(event, '${atleta.id}')" class="mt-4 space-y-3">
-          <textarea
-            id="msg-individual-text"
-            rows="5"
-            required
-            placeholder="Hola ${esc(atleta.nombre)}, …"
-            class="w-full rounded-lg border bg-card p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-          ></textarea>
-          <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-95">
-            <i data-lucide="send" class="size-4"></i> Enviar
-          </button>
-        </form>
-      </section>
+      <div class="grid gap-6 lg:grid-cols-[26rem_1fr]">
+        <section class="rounded-xl border bg-card p-5 h-fit">
+          <h2 class="text-2xl font-bold">Nuevo mensaje directo</h2>
+          <p class="text-sm text-muted-foreground">
+            Solo lo verá ${esc(atleta.nombre)}${atleta.tutor ? ` y su familia (${esc(atleta.tutor.nombre)})` : ''}. El atleta podrá responderte desde su portal.
+          </p>
+          <form onsubmit="enviarMensajeIndividual(event, '${atleta.id}')" class="mt-4 space-y-3">
+            <input
+              id="msg-individual-title"
+              placeholder="Asunto (opcional, ej.: Plan de esta semana)"
+              class="h-10 w-full rounded-lg border bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+            />
+            <textarea
+              id="msg-individual-text"
+              rows="4"
+              required
+              placeholder="Hola ${esc(atleta.nombre)}, …"
+              class="w-full rounded-lg border bg-card p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+            ></textarea>
+            <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-95">
+              <i data-lucide="send" class="size-4"></i> Enviar mensaje
+            </button>
+          </form>
+        </section>
+
+        <section class="space-y-3">
+          <h2 class="text-2xl font-bold">Conversación con ${esc(atleta.nombre)}</h2>
+          ${
+            msgsIndiv.length === 0
+              ? `<div class="rounded-xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
+                  Todavía no hay mensajes directos con ${esc(atleta.nombre)}.
+                </div>`
+              : msgsIndiv.map((m) => renderMessageThreadCard(m, atleta.id, 'entrenador', false)).join('')
+          }
+        </section>
+      </div>
     `;
   }
 
@@ -1703,17 +1705,22 @@ window.addExtraField = (e, atletaId) => {
 window.enviarMensajeIndividual = (e, atletaId) => {
   e.preventDefault();
   const texto = document.getElementById('msg-individual-text').value.trim();
+  const titleEl = document.getElementById('msg-individual-title');
+  const tituloCustom = titleEl ? titleEl.value.trim() : '';
   if (!texto) return;
   const atleta = Helpers.getAtleta(atletaId);
   DB.avisos.unshift({
     id: `a-${Date.now()}`,
     tipo: 'Individual',
-    titulo: `Mensaje para ${atleta.nombre}`,
+    atletaId: atleta.id,
+    autor: 'entrenador',
+    titulo: tituloCustom || `Mensaje de tu entrenador`,
     cuerpo: texto,
     fecha: DB.hoy,
     destinatarios: Helpers.nombreCompleto(atleta),
     leidos: 0,
     total: 1,
+    respuestas: [],
   });
   saveDB();
   showToast(`Mensaje enviado a ${atleta.nombre}`);
@@ -2083,24 +2090,33 @@ function viewCoachAvisos() {
       </form>
 
       <section>
-        <h2 class="mb-3 text-2xl font-bold">Enviados</h2>
+        <h2 class="mb-3 text-2xl font-bold">Enviados y Conversaciones</h2>
         <ul class="space-y-3">
-          ${DB.avisos
-            .map(
-              (a) => `
-            <li class="rounded-xl border bg-card p-5">
-              <div class="flex flex-wrap items-center gap-2 text-xs">
-                <span class="rounded-full px-2 py-0.5 font-medium ${tipoColor[a.tipo] || ''}">${esc(a.tipo)}</span>
-                <span class="text-muted-foreground">${Helpers.fechaCorta(a.fecha)} · para ${esc(a.destinatarios)}</span>
-                <span class="ml-auto text-muted-foreground tabular-nums">Leído ${a.leidos}/${a.total}</span>
-                <button type="button" onclick="deleteAviso('${a.id}')" class="text-muted-foreground hover:text-destructive">✕</button>
-              </div>
-              <h3 class="mt-2 text-xl font-bold">${esc(a.titulo)}</h3>
-              <p class="mt-1 text-sm text-muted-foreground">${esc(a.cuerpo)}</p>
-            </li>
-          `
-            )
-            .join('')}
+          ${
+            DB.avisos.length === 0
+              ? `<li class="rounded-xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground">Todavía no hay avisos ni mensajes enviados.</li>`
+              : DB.avisos
+                  .map(
+                    (a) => `
+                  <li class="rounded-xl border bg-card p-5">
+                    <div class="flex flex-wrap items-center gap-2 text-xs">
+                      <span class="rounded-full px-2 py-0.5 font-medium ${tipoColor[a.tipo] || ''}">${esc(a.tipo)}</span>
+                      <span class="text-muted-foreground">${Helpers.fechaCorta(a.fecha)} · ${a.autor === 'atleta' ? `Enviado por <strong>${esc(a.destinatarios)}</strong>` : `para <strong>${esc(a.destinatarios)}</strong>`}</span>
+                      ${
+                        (a.respuestas || []).length > 0
+                          ? `<span class="rounded-full bg-primary/15 px-2 py-0.5 font-semibold text-primary">${a.respuestas.length} respuesta${a.respuestas.length === 1 ? '' : 's'}</span>`
+                          : ''
+                      }
+                      <button type="button" onclick="deleteAviso('${a.id}')" class="ml-auto text-muted-foreground hover:text-destructive" title="Eliminar mensaje">✕</button>
+                    </div>
+                    <h3 class="mt-2 text-xl font-bold">${esc(a.titulo)}</h3>
+                    <p class="mt-1 text-sm text-muted-foreground whitespace-pre-line">${esc(a.cuerpo)}</p>
+                    ${renderRepliesSection(a, a.atletaId || '', 'entrenador', false)}
+                  </li>
+                `
+                  )
+                  .join('')
+          }
         </ul>
       </section>
     </div>
@@ -2130,19 +2146,275 @@ window.enviarAviso = (e) => {
   const cuerpo = document.getElementById('av-cuerpo').value.trim();
   const dest = document.getElementById('av-dest').value;
   if (!titulo || !cuerpo) return;
+  const targetAtleta =
+    State.avisoTipo === 'Individual'
+      ? DB.atletas.find((a) => Helpers.nombreCompleto(a) === dest)
+      : null;
   const total = State.avisoTipo === 'Individual' ? 1 : dest === 'Todo el grupo' ? DB.atletas.length : Math.ceil(DB.atletas.length / 2);
   DB.avisos.unshift({
     id: `a-${Date.now()}`,
     tipo: State.avisoTipo,
+    atletaId: targetAtleta ? targetAtleta.id : null,
+    autor: 'entrenador',
     titulo,
     cuerpo,
     fecha: DB.hoy,
     destinatarios: dest,
     leidos: 0,
     total,
+    respuestas: [],
   });
   saveDB();
   showToast(`Aviso enviado a ${dest}`);
+  renderApp();
+};
+
+/* ---------- Tarjeta compartida de Objetivos y Carreras del Año ---------- */
+function renderObjetivosCard(atleta, canEdit = true) {
+  const lista = atleta.objetivos || [];
+  return `
+    <div class="rounded-xl border bg-card p-5">
+      <div class="flex items-center justify-between gap-2">
+        <div>
+          <h3 class="text-xl font-bold">Objetivos y carreras del año</h3>
+          <p class="text-xs text-muted-foreground">Metas deportivas y competencias planificadas</p>
+        </div>
+        ${
+          canEdit
+            ? `<button
+                type="button"
+                onclick="openObjetivoModal('${atleta.id}')"
+                class="inline-flex shrink-0 items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-95"
+              >
+                <i data-lucide="plus" class="size-3.5"></i> Cargar
+              </button>`
+            : ''
+        }
+      </div>
+      ${
+        lista.length === 0
+          ? `<div class="mt-3 rounded-lg border border-dashed p-4 text-center">
+              <p class="text-sm text-muted-foreground">Sin objetivos ni carreras cargadas aún.</p>
+              ${
+                canEdit
+                  ? `<button type="button" onclick="openObjetivoModal('${atleta.id}')" class="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+                      + Agregar carrera u objetivo del año
+                    </button>`
+                  : ''
+              }
+            </div>`
+          : `<ul class="mt-4 space-y-3">
+              ${lista
+                .map(
+                  (o, idx) => {
+                    const oid = o.id || `idx-${idx}`;
+                    const isCarrera = o.tipo === 'carrera' || Boolean(o.distancia);
+                    return `
+                      <li class="rounded-lg border bg-muted/25 p-3">
+                        <div class="flex flex-wrap items-center justify-between gap-1.5">
+                          <div class="flex flex-wrap items-center gap-1.5">
+                            <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                              isCarrera
+                                ? 'bg-primary/15 text-primary'
+                                : 'bg-secondary text-secondary-foreground'
+                            }">
+                              ${isCarrera ? `🏁 Carrera${o.distancia ? ` · ${esc(o.distancia)}` : ''}` : '🎯 Meta deportiva'}
+                            </span>
+                            ${
+                              o.creadoPor
+                                ? `<span class="text-[11px] text-muted-foreground">· por ${o.creadoPor === 'atleta' ? 'Atleta' : 'Entrenador'}</span>`
+                                : ''
+                            }
+                          </div>
+                          ${
+                            canEdit
+                              ? `<div class="flex items-center gap-1">
+                                  <button type="button" onclick="openObjetivoModal('${atleta.id}', '${oid}')" class="rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground" title="Editar">
+                                    Editar
+                                  </button>
+                                  <button type="button" onclick="deleteObjetivo('${atleta.id}', '${oid}')" class="rounded px-1.5 py-0.5 text-xs text-destructive hover:bg-destructive/10" title="Eliminar">
+                                    ✕
+                                  </button>
+                                </div>`
+                              : ''
+                          }
+                        </div>
+                        <p class="mt-1.5 text-sm font-bold">${esc(o.texto)}</p>
+                        <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          ${o.fecha ? `<span>📅 Fecha: <strong>${Helpers.fechaCorta(o.fecha)}</strong></span>` : ''}
+                          ${o.metaTiempo ? `<span>⏱️ Objetivo: <strong>${esc(o.metaTiempo)}</strong></span>` : ''}
+                        </div>
+                        <div class="mt-2 flex items-center gap-2">
+                          <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                            <div class="h-full bg-primary" style="width: ${Math.min(100, Math.max(0, Number(o.progreso) || 0))}%"></div>
+                          </div>
+                          <span class="text-[11px] font-semibold tabular-nums text-muted-foreground">${Number(o.progreso) || 0}%</span>
+                        </div>
+                      </li>
+                    `;
+                  }
+                )
+                .join('')}
+            </ul>`
+      }
+    </div>
+  `;
+}
+
+/* ---------- Hilo de Respuestas en Mensajes Directos y Avisos ---------- */
+function renderRepliesSection(aviso, atletaId, currentRole, readOnly = false) {
+  if (aviso.id === 'mod') return '';
+  const respuestas = aviso.respuestas || [];
+  const canReply = !readOnly && (aviso.tipo === 'Individual' || currentRole === 'entrenador' || Boolean(atletaId));
+  return `
+    <div class="mt-3 border-t pt-3 space-y-2.5">
+      ${
+        respuestas.length > 0
+          ? `<div class="space-y-2">
+              ${respuestas
+                .map(
+                  (r) => `
+                <div class="rounded-lg px-3.5 py-2.5 text-xs ${
+                  r.autorRol === 'entrenador'
+                    ? 'bg-primary/10 border border-primary/20'
+                    : 'bg-muted/70 border border-border'
+                }">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="font-bold ${r.autorRol === 'entrenador' ? 'text-primary' : 'text-foreground'}">
+                      ${esc(r.autorNombre || (r.autorRol === 'entrenador' ? 'Entrenador' : 'Atleta'))}
+                    </span>
+                    <span class="text-[11px] text-muted-foreground">${Helpers.fechaCorta(r.fecha)}${r.hora ? ` · ${esc(r.hora)}` : ''}</span>
+                  </div>
+                  <p class="mt-1 text-sm text-foreground whitespace-pre-line">${esc(r.texto)}</p>
+                </div>
+              `
+                )
+                .join('')}
+            </div>`
+          : ''
+      }
+      ${
+        canReply
+          ? `<form onsubmit="responderMensaje(event, '${aviso.id}', '${atletaId || aviso.atletaId || ''}', '${currentRole}')" class="flex gap-2 pt-1">
+              <input
+                id="reply-input-${aviso.id}-${currentRole}"
+                required
+                placeholder="${currentRole === 'entrenador' ? 'Escribir respuesta al atleta…' : 'Escribir respuesta a tu entrenador…'}"
+                class="h-9 flex-1 rounded-lg border bg-card px-3 text-xs outline-none focus:ring-2 focus:ring-ring"
+              />
+              <button
+                type="submit"
+                class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3.5 text-xs font-semibold text-primary-foreground hover:opacity-95"
+              >
+                <i data-lucide="reply" class="size-3.5"></i> Responder
+              </button>
+            </form>`
+          : ''
+      }
+    </div>
+  `;
+}
+
+function renderMessageThreadCard(m, atletaId, currentRole, readOnly = false) {
+  return `
+    <div class="rounded-xl border bg-card p-5">
+      <div class="flex items-start gap-3">
+        <i data-lucide="${m.tipo === 'Individual' ? 'message-square' : 'megaphone'}" class="mt-0.5 size-5 shrink-0 text-primary"></i>
+        <div class="flex-1 min-w-0">
+          <div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span class="rounded-full bg-accent px-2 py-0.5 font-semibold text-accent-foreground">
+              ${m.tipo === 'Individual' ? 'Mensaje Directo' : esc(m.tipo)}
+            </span>
+            <span>${Helpers.fechaCorta(m.fecha)}</span>
+            ${
+              m.autor === 'atleta'
+                ? `<span class="font-medium text-primary">· Enviado por ${esc(m.destinatarios)}</span>`
+                : `<span class="font-medium">· Entrenador ${esc(DB.equipo.entrenador)}</span>`
+            }
+            ${
+              currentRole === 'entrenador' && m.id !== 'mod'
+                ? `<button type="button" onclick="deleteAviso('${m.id}')" class="ml-auto text-muted-foreground hover:text-destructive" title="Eliminar">✕</button>`
+                : ''
+            }
+          </div>
+          <h3 class="mt-1.5 text-lg font-bold">${esc(m.titulo)}</h3>
+          <p class="mt-1 text-sm text-muted-foreground whitespace-pre-line">${esc(m.cuerpo)}</p>
+          ${renderRepliesSection(m, atletaId, currentRole, readOnly)}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+window.responderMensaje = (e, avisoId, atletaId, rol) => {
+  e.preventDefault();
+  const input = document.getElementById(`reply-input-${avisoId}-${rol}`);
+  if (!input) return;
+  const texto = input.value.trim();
+  if (!texto) return;
+
+  const aviso = DB.avisos.find((a) => a.id === avisoId);
+  if (!aviso) return;
+
+  const atleta = atletaId ? Helpers.getAtleta(atletaId) : null;
+  if (atleta && !aviso.atletaId && aviso.tipo === 'Individual') {
+    aviso.atletaId = atleta.id;
+  }
+
+  const now = new Date();
+  const hora = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const autorNombre =
+    rol === 'entrenador'
+      ? `Entrenador (${DB.equipo.entrenador || 'Cristian Torres'})`
+      : atleta
+      ? Helpers.nombreCompleto(atleta)
+      : 'Atleta';
+
+  aviso.respuestas = aviso.respuestas || [];
+  aviso.respuestas.push({
+    id: `rep-${Date.now()}`,
+    autorRol: rol,
+    autorNombre,
+    atletaId: atleta ? atleta.id : null,
+    texto,
+    fecha: DB.hoy,
+    hora,
+  });
+  aviso.leidos = 1;
+
+  saveDB();
+  showToast('Respuesta enviada');
+  renderApp();
+};
+
+window.enviarMensajeAtletaAlEntrenador = (e, atletaId) => {
+  e.preventDefault();
+  const asuntoEl = document.getElementById('atl-msg-asunto');
+  const cuerpoEl = document.getElementById('atl-msg-cuerpo');
+  if (!cuerpoEl) return;
+  const cuerpo = cuerpoEl.value.trim();
+  const asunto = asuntoEl ? asuntoEl.value.trim() : '';
+  if (!cuerpo) return;
+
+  const atleta = Helpers.getAtleta(atletaId);
+  if (!atleta) return;
+
+  DB.avisos.unshift({
+    id: `a-${Date.now()}`,
+    tipo: 'Individual',
+    atletaId: atleta.id,
+    autor: 'atleta',
+    titulo: asunto || `Consulta de ${atleta.nombre} ${atleta.apellido}`,
+    cuerpo,
+    fecha: DB.hoy,
+    destinatarios: Helpers.nombreCompleto(atleta),
+    leidos: 0,
+    total: 1,
+    respuestas: [],
+  });
+
+  saveDB();
+  showToast('Mensaje enviado a tu entrenador');
   renderApp();
 };
 
@@ -2173,55 +2445,64 @@ function viewAtletaPortal(atletaId, modoFamilia = false) {
             titulo: 'Tu plan fue modificado',
             cuerpo: 'Revisá el entrenamiento de esta semana: tu entrenador actualizó la sesión.',
             fecha: DB.hoy,
+            respuestas: [],
           },
         ]
       : []),
     ...DB.avisos.filter(
-      (av) => av.tipo !== 'Individual' || av.destinatarios === Helpers.nombreCompleto(atleta)
+      (av) =>
+        av.tipo !== 'Individual' ||
+        av.atletaId === atleta.id ||
+        av.destinatarios === Helpers.nombreCompleto(atleta)
     ),
   ];
 
   let tabBody = '';
   if (State.portalTab === 'semana') {
     tabBody = `
-      <div class="space-y-3">
-        ${
-          hoy && hoy.estado === 'pendiente' && !familia
-            ? `<div class="flex flex-col gap-3 rounded-xl bg-primary p-4 text-primary-foreground sm:flex-row sm:items-center">
-                <p class="flex-1 font-medium">Hoy toca <strong>${esc(hoy.titulo)}</strong>. ¿Ya entrenaste?</p>
-                <button type="button" onclick="openRegistroModal('${atleta.id}', '${hoy.id}')" class="rounded-lg bg-secondary px-4 py-2 text-sm font-semibold text-secondary-foreground hover:opacity-95">
-                  Registrar entrenamiento
-                </button>
-              </div>`
-            : ''
-        }
-        ${
-          sesiones.length === 0
-            ? `<div class="rounded-xl border border-dashed p-10 text-center text-muted-foreground">
-                Tu entrenador todavía no cargó el plan de esta semana.
-              </div>`
-            : sesiones
-                .map((s) =>
-                  renderSessionCard(
-                    s,
-                    !familia && s.tipo !== 'Descanso' && s.fecha <= DB.hoy
-                      ? `<button type="button" onclick="openRegistroModal('${atleta.id}', '${s.id}')" class="mt-3 inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                          s.estado === 'pendiente'
-                            ? 'bg-primary text-primary-foreground'
-                            : 'hover:bg-muted -ml-2 text-foreground'
-                        }">
-                          ${s.estado === 'pendiente' ? 'Registrar' : 'Editar registro'}
-                        </button>`
-                      : ''
+      <div class="grid gap-6 lg:grid-cols-[1fr_23rem]">
+        <div class="space-y-3">
+          ${
+            hoy && hoy.estado === 'pendiente' && !familia
+              ? `<div class="flex flex-col gap-3 rounded-xl bg-primary p-4 text-primary-foreground sm:flex-row sm:items-center">
+                  <p class="flex-1 font-medium">Hoy toca <strong>${esc(hoy.titulo)}</strong>. ¿Ya entrenaste?</p>
+                  <button type="button" onclick="openRegistroModal('${atleta.id}', '${hoy.id}')" class="rounded-lg bg-secondary px-4 py-2 text-sm font-semibold text-secondary-foreground hover:opacity-95">
+                    Registrar entrenamiento
+                  </button>
+                </div>`
+              : ''
+          }
+          ${
+            sesiones.length === 0
+              ? `<div class="rounded-xl border border-dashed p-10 text-center text-muted-foreground">
+                  Tu entrenador todavía no cargó el plan de esta semana.
+                </div>`
+              : sesiones
+                  .map((s) =>
+                    renderSessionCard(
+                      s,
+                      !familia && s.tipo !== 'Descanso' && s.fecha <= DB.hoy
+                        ? `<button type="button" onclick="openRegistroModal('${atleta.id}', '${s.id}')" class="mt-3 inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                            s.estado === 'pendiente'
+                              ? 'bg-primary text-primary-foreground'
+                              : 'hover:bg-muted -ml-2 text-foreground'
+                          }">
+                            ${s.estado === 'pendiente' ? 'Registrar' : 'Editar registro'}
+                          </button>`
+                        : ''
+                    )
                   )
-                )
-                .join('')
-        }
+                  .join('')
+          }
+        </div>
+        <aside class="space-y-4">
+          ${renderObjetivosCard(atleta, !familia)}
+        </aside>
       </div>
     `;
   } else if (State.portalTab === 'resultados') {
     tabBody = `
-      <div class="grid gap-6 lg:grid-cols-[1fr_22rem]">
+      <div class="grid gap-6 lg:grid-cols-[1fr_23rem]">
         <div class="space-y-6">
           <section>
             <h2 class="text-2xl font-bold">Mis marcas</h2>
@@ -2261,6 +2542,7 @@ function viewAtletaPortal(atletaId, modoFamilia = false) {
           </section>
         </div>
         <div class="space-y-4">
+          ${renderObjetivosCard(atleta, !familia)}
           <section class="rounded-xl border bg-card p-5">
             <h2 class="text-xl font-bold">Mi evolución</h2>
             <div class="mt-3">${renderPaceChart(atleta.evolucion)}</div>
@@ -2323,22 +2605,54 @@ function viewAtletaPortal(atletaId, modoFamilia = false) {
     `;
   } else if (State.portalTab === 'avisos') {
     tabBody = `
-      <ul class="max-w-3xl space-y-3">
-        ${mensajes
-          .map(
-            (m) => `
-          <li class="flex gap-4 rounded-xl border bg-card p-5">
-            <i data-lucide="megaphone" class="size-5 shrink-0 text-primary"></i>
-            <div>
-              <p class="text-xs text-muted-foreground">${esc(m.tipo)} · ${Helpers.fechaCorta(m.fecha)}</p>
-              <h3 class="text-xl font-bold">${esc(m.titulo)}</h3>
-              <p class="mt-1 text-sm text-muted-foreground">${esc(m.cuerpo)}</p>
-            </div>
-          </li>
-        `
-          )
-          .join('')}
-      </ul>
+      <div class="grid gap-6 lg:grid-cols-[1fr_24rem]">
+        <div class="space-y-3">
+          <h2 class="text-2xl font-bold">Mensajes directos y avisos</h2>
+          ${
+            mensajes.length === 0
+              ? `<div class="rounded-xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
+                  No tenés mensajes ni avisos por el momento.
+                </div>`
+              : mensajes.map((m) => renderMessageThreadCard(m, atleta.id, 'atleta', Boolean(familia))).join('')
+          }
+        </div>
+        ${
+          !familia
+            ? `<section class="rounded-xl border bg-card p-5 h-fit">
+                <h3 class="text-xl font-bold">Escribir a mi entrenador</h3>
+                <p class="mt-1 text-xs text-muted-foreground">
+                  Enviá una consulta o mensaje directo a ${esc(DB.equipo.entrenador)}.
+                </p>
+                <form onsubmit="enviarMensajeAtletaAlEntrenador(event, '${atleta.id}')" class="mt-4 space-y-3">
+                  <div>
+                    <label class="text-xs font-medium">Asunto</label>
+                    <input
+                      id="atl-msg-asunto"
+                      placeholder="Ej.: Consulta sobre el entrenamiento"
+                      class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label class="text-xs font-medium">Mensaje</label>
+                    <textarea
+                      id="atl-msg-cuerpo"
+                      rows="4"
+                      required
+                      placeholder="Hola profe, te quería comentar que…"
+                      class="mt-1 w-full rounded-lg border bg-card p-3 text-sm"
+                    ></textarea>
+                  </div>
+                  <button
+                    type="submit"
+                    class="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:opacity-95"
+                  >
+                    <i data-lucide="send" class="size-4"></i> Enviar mensaje al entrenador
+                  </button>
+                </form>
+              </section>`
+            : ''
+        }
+      </div>
     `;
   }
 
@@ -2406,10 +2720,25 @@ function viewAtletaPortal(atletaId, modoFamilia = false) {
                 }
               </div>
               <div class="rounded-xl bg-white/10 p-4">
-                <p class="text-xs uppercase tracking-wide text-ink-foreground/60">Objetivo</p>
-                <p class="mt-1 line-clamp-2 font-semibold">${esc(atleta.objetivos[0]?.texto || 'Entrenar con constancia')}</p>
+                <div class="flex items-center justify-between gap-2">
+                  <p class="text-xs uppercase tracking-wide text-ink-foreground/60">Objetivo / Carrera</p>
+                  ${
+                    !familia
+                      ? `<button type="button" onclick="openObjetivoModal('${atleta.id}')" class="rounded bg-white/15 px-2 py-0.5 text-[11px] font-semibold text-ink-foreground hover:bg-white/25">
+                          + Cargar
+                        </button>`
+                      : ''
+                  }
+                </div>
+                <p class="mt-1 line-clamp-2 font-semibold">
+                  ${esc(
+                    atleta.objetivos[0]
+                      ? `${atleta.objetivos[0].texto}${atleta.objetivos[0].distancia ? ` (${atleta.objetivos[0].distancia})` : ''}`
+                      : 'Sin objetivos cargados aún'
+                  )}
+                </p>
                 <div class="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/15">
-                  <div class="h-full bg-brand-lime" style="width: ${atleta.objetivos[0]?.progreso || 50}%"></div>
+                  <div class="h-full bg-brand-lime" style="width: ${atleta.objetivos[0]?.progreso || 0}%"></div>
                 </div>
               </div>
             </div>
@@ -2420,10 +2749,10 @@ function viewAtletaPortal(atletaId, modoFamilia = false) {
       <div class="mx-auto max-w-content px-4 sm:px-6">
         <div class="flex gap-2 overflow-x-auto border-b">
           ${[
-            ['semana', 'Mi semana'],
-            ['resultados', 'Resultados'],
+            ['semana', 'Mi semana y Objetivos'],
+            ['resultados', 'Resultados y Carreras'],
             ['pagos', 'Pagos'],
-            ['avisos', 'Avisos'],
+            ['avisos', 'Mensajes y Avisos'],
           ]
             .map(
               ([v, l]) => `
@@ -2475,6 +2804,218 @@ function showModalHtml(innerHtml, maxWidthCls = 'max-w-lg') {
   `;
   if (window.lucide) window.lucide.createIcons();
 }
+
+// Modal para cargar o editar Objetivos y Carreras del Año (usado tanto por Entrenador como por Atleta)
+window.openObjetivoModal = (atletaId, objId = null) => {
+  const atleta = Helpers.getAtleta(atletaId);
+  if (!atleta) return;
+  atleta.objetivos = atleta.objetivos || [];
+
+  let existing = null;
+  if (objId) {
+    existing = atleta.objetivos.find((o, idx) => (o.id || `idx-${idx}`) === objId) || null;
+  }
+
+  const tipoActual = existing?.tipo || 'carrera';
+  const textoActual = existing?.texto || '';
+  const distanciaActual = existing?.distancia || '10K';
+  const fechaActual = existing?.fecha || DB.hoy;
+  const metaTiempoActual = existing?.metaTiempo || '';
+  const progresoActual = existing ? Number(existing.progreso) || 0 : 25;
+  const distanciasSugeridas = ['', '80 m', '150 m', '300 m', '600 m', '800 m', '1500 m', '3000 m', '5K', '10K', '15K', '21K', '42K', 'Cross Country', 'Trail'];
+
+  showModalHtml(
+    `
+    <div class="flex items-start justify-between">
+      <div>
+        <h2 class="text-xl font-bold">${existing ? 'Editar objetivo / carrera' : 'Cargar objetivo o carrera del año'}</h2>
+        <p class="text-sm text-muted-foreground">Planificación anual de ${esc(atleta.nombre)} ${esc(atleta.apellido)}</p>
+      </div>
+      <button type="button" onclick="closeModal()" class="text-muted-foreground hover:text-foreground">✕</button>
+    </div>
+
+    <form onsubmit="saveObjetivo(event, '${atleta.id}', '${objId || ''}')" class="mt-4 space-y-4">
+      <div>
+        <label class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tipo de objetivo</label>
+        <div class="mt-1.5 grid grid-cols-2 gap-2">
+          <label class="flex cursor-pointer items-center gap-2 rounded-lg border bg-card p-3 text-sm font-semibold hover:bg-muted">
+            <input type="radio" name="obj-tipo" value="carrera" ${tipoActual === 'carrera' ? 'checked' : ''} class="accent-primary" />
+            <span>🏁 Carrera / Competencia</span>
+          </label>
+          <label class="flex cursor-pointer items-center gap-2 rounded-lg border bg-card p-3 text-sm font-semibold hover:bg-muted">
+            <input type="radio" name="obj-tipo" value="meta" ${tipoActual === 'meta' ? 'checked' : ''} class="accent-primary" />
+            <span>🎯 Meta deportiva</span>
+          </label>
+        </div>
+      </div>
+
+      ${
+        DB.competencias.length > 0
+          ? `<div class="rounded-lg bg-muted/50 p-3">
+              <label class="text-xs font-medium text-muted-foreground">¿Elegir una carrera del calendario del equipo? (opcional)</label>
+              <select onchange="fillObjetivoFromCalendario(this.value)" class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-xs">
+                <option value="">Escribir manualmente o seleccionar de la lista…</option>
+                ${DB.competencias
+                  .map(
+                    (c) =>
+                      `<option value="${c.id}">${esc(c.nombre)} (${Helpers.fechaCorta(c.fecha)} · ${esc((c.distancias || []).join('/'))})</option>`
+                  )
+                  .join('')}
+              </select>
+            </div>`
+          : ''
+      }
+
+      <div>
+        <label class="text-xs font-medium">Nombre de la carrera u objetivo del año *</label>
+        <input
+          id="obj-texto"
+          required
+          value="${esc(textoActual)}"
+          placeholder="Ej.: Corrida Aniversario Valcheta / Campeonato Provincial / Bajar marca en 5K"
+          class="mt-1 h-10 w-full rounded-lg border bg-card px-3 text-sm"
+        />
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-medium">Distancia / Prueba</label>
+          <input
+            id="obj-distancia"
+            list="obj-distancias-list"
+            value="${esc(distanciaActual)}"
+            placeholder="Ej.: 10K, 5K, 1500 m"
+            class="mt-1 h-10 w-full rounded-lg border bg-card px-3 text-sm"
+          />
+          <datalist id="obj-distancias-list">
+            ${distanciasSugeridas.map((d) => `<option value="${esc(d)}"></option>`).join('')}
+          </datalist>
+        </div>
+        <div>
+          <label class="text-xs font-medium">Fecha de la carrera / meta *</label>
+          <input
+            id="obj-fecha"
+            type="date"
+            required
+            value="${esc(fechaActual)}"
+            class="mt-1 h-10 w-full rounded-lg border bg-card px-3 text-sm"
+          />
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-medium">Meta o tiempo esperado (opcional)</label>
+          <input
+            id="obj-meta"
+            value="${esc(metaTiempoActual)}"
+            placeholder="Ej.: Participar / Sub 45:00 / Podio"
+            class="mt-1 h-10 w-full rounded-lg border bg-card px-3 text-sm"
+          />
+        </div>
+        <div>
+          <label class="text-xs font-medium">Progreso actual (<span id="obj-prog-val">${progresoActual}</span>%)</label>
+          <input
+            id="obj-progreso"
+            type="range"
+            min="0"
+            max="100"
+            step="5"
+            value="${progresoActual}"
+            oninput="document.getElementById('obj-prog-val').textContent = this.value"
+            class="mt-3 w-full accent-primary"
+          />
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="closeModal()" class="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">
+          Cancelar
+        </button>
+        <button type="submit" class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-95">
+          Guardar objetivo
+        </button>
+      </div>
+    </form>
+  `
+  );
+};
+
+window.fillObjetivoFromCalendario = (compId) => {
+  if (!compId) return;
+  const comp = DB.competencias.find((c) => c.id === compId);
+  if (!comp) return;
+  const txtEl = document.getElementById('obj-texto');
+  const distEl = document.getElementById('obj-distancia');
+  const fecEl = document.getElementById('obj-fecha');
+  if (txtEl) txtEl.value = `${comp.nombre} (${comp.lugar})`;
+  if (distEl && comp.distancias && comp.distancias.length) distEl.value = comp.distancias[0];
+  if (fecEl && comp.fecha) fecEl.value = comp.fecha;
+};
+
+window.saveObjetivo = (e, atletaId, objId = '') => {
+  e.preventDefault();
+  const atleta = Helpers.getAtleta(atletaId);
+  if (!atleta) return;
+  atleta.objetivos = atleta.objetivos || [];
+
+  const tipoRadio = document.querySelector('input[name="obj-tipo"]:checked');
+  const tipo = tipoRadio ? tipoRadio.value : 'carrera';
+  const texto = document.getElementById('obj-texto').value.trim();
+  const distancia = document.getElementById('obj-distancia').value.trim();
+  const fecha = document.getElementById('obj-fecha').value;
+  const metaTiempo = document.getElementById('obj-meta').value.trim();
+  const progreso = Number(document.getElementById('obj-progreso').value) || 0;
+
+  if (!texto) return;
+
+  const session = Auth.getSession();
+  const creadoPor = session && session.role === 'coach' ? 'entrenador' : 'atleta';
+
+  if (objId) {
+    const idx = atleta.objetivos.findIndex((o, i) => (o.id || `idx-${i}`) === objId);
+    if (idx >= 0) {
+      atleta.objetivos[idx] = {
+        ...atleta.objetivos[idx],
+        id: atleta.objetivos[idx].id || `obj-${Date.now()}`,
+        tipo,
+        texto,
+        distancia,
+        fecha,
+        metaTiempo,
+        progreso,
+      };
+    }
+  } else {
+    atleta.objetivos.push({
+      id: `obj-${Date.now()}`,
+      tipo,
+      texto,
+      distancia,
+      fecha,
+      metaTiempo,
+      progreso,
+      creadoPor,
+    });
+  }
+
+  // Ordenar objetivos por fecha más próxima
+  atleta.objetivos.sort((a, b) => (a.fecha || '9999').localeCompare(b.fecha || '9999'));
+
+  saveDB();
+  closeModal();
+  showToast(objId ? 'Objetivo actualizado' : 'Objetivo / carrera cargada con éxito');
+  renderApp();
+};
+
+window.deleteObjetivo = (atletaId, objId) => {
+  const atleta = Helpers.getAtleta(atletaId);
+  if (!atleta || !Array.isArray(atleta.objetivos)) return;
+  atleta.objetivos = atleta.objetivos.filter((o, idx) => (o.id || `idx-${idx}`) !== objId);
+  saveDB();
+  showToast('Objetivo eliminado');
+  renderApp();
+};
 
 // Modal con la Tabla Completa de la Nómina Oficial y Credenciales de Acceso
 window.openNominaCredencialesModal = () => {

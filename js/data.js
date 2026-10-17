@@ -587,9 +587,46 @@ const INITIAL_DB = {
   mensajes: {},
 };
 
-/* ---------- Limpieza de campos undefined para Firestore ---------- */
+/* ---------- Limpieza de campos undefined y reparación de acentos UTF-8 ---------- */
+function fixMojibakeString(str) {
+  if (typeof str !== 'string' || !str.includes('Ã')) return str;
+  return str
+    .replace(/Ã\u00ad/g, 'í')
+    .replace(/Ã¡/g, 'á')
+    .replace(/Ã©/g, 'é')
+    .replace(/Ã³/g, 'ó')
+    .replace(/Ãº/g, 'ú')
+    .replace(/Ã±/g, 'ñ')
+    .replace(/Ã\u0081/g, 'Á')
+    .replace(/Ã\u0089/g, 'É')
+    .replace(/Ã\u008d/g, 'Í')
+    .replace(/Ã\u0093/g, 'Ó')
+    .replace(/Ã\u009a/g, 'Ú')
+    .replace(/Ã\u0091/g, 'Ñ')
+    .replace(/EfraÃn/g, 'Efraín')
+    .replace(/RocÃo/g, 'Rocío')
+    .replace(/DarÃo/g, 'Darío')
+    .replace(/JazmÃn/g, 'Jazmín')
+    .replace(/BenjamÃn/g, 'Benjamín')
+    .replace(/RÃo/g, 'Río')
+    .replace(/fÃsico/g, 'físico');
+}
+
+function fixMojibakeInObj(val) {
+  if (typeof val === 'string') return fixMojibakeString(val);
+  if (Array.isArray(val)) return val.map(fixMojibakeInObj);
+  if (val && typeof val === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(val)) {
+      if (v !== undefined) out[k] = fixMojibakeInObj(v);
+    }
+    return out;
+  }
+  return val;
+}
+
 function sanitizeForFirestore(obj) {
-  return JSON.parse(JSON.stringify(obj));
+  return fixMojibakeInObj(JSON.parse(JSON.stringify(obj)));
 }
 
 function isDummyData(dbObj) {
@@ -604,7 +641,7 @@ function loadDB() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw);
+      const parsed = fixMojibakeInObj(JSON.parse(raw));
       if (parsed && Array.isArray(parsed.atletas) && !isDummyData(parsed)) {
         // Asegurar credenciales y estructura del equipo actualizadas
         parsed.equipo = {
@@ -706,7 +743,7 @@ const CloudSync = {
           }
 
           if (snapshot.exists) {
-            const cloudData = snapshot.data();
+            const cloudData = fixMojibakeInObj(snapshot.data());
             // Si en la nube habían quedado datos de prueba viejos, migrar automáticamente los datos reales
             if (isDummyData(cloudData)) {
               console.log('Migrando Nómina Inicial real a Firebase Firestore...');
