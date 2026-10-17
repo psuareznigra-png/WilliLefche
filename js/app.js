@@ -9,6 +9,7 @@ const State = {
   atletasQuery: '',
   atletasCat: 'Todas',
   fichaTab: 'plan',
+  planFiltro: 'todas',
   pagosEstado: 'Todos',
   pagosConcepto: 'Todos',
   avisoTipo: 'General',
@@ -17,6 +18,31 @@ const State = {
   mobileMenuOpen: false,
   loginError: '',
 };
+
+function filtrarSesionesPorPeriodo(sesiones, filtro) {
+  const ordenadas = [...(sesiones || [])].sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
+  if (!filtro || filtro === 'todas') return ordenadas;
+  const hoyStr = DB.hoy || new Date().toISOString().slice(0, 10);
+  if (filtro === 'dia') {
+    return ordenadas.filter((s) => s.fecha === hoyStr);
+  }
+  if (filtro === 'mes') {
+    const ym = hoyStr.slice(0, 7);
+    return ordenadas.filter((s) => (s.fecha || '').startsWith(ym));
+  }
+  if (filtro === 'semana') {
+    const hoyDate = new Date(hoyStr + 'T00:00:00');
+    const day = hoyDate.getDay() || 7;
+    const lunes = new Date(hoyDate);
+    lunes.setDate(hoyDate.getDate() - day + 1);
+    const domingo = new Date(lunes);
+    domingo.setDate(lunes.getDate() + 6);
+    const minStr = lunes.toISOString().slice(0, 10);
+    const maxStr = domingo.toISOString().slice(0, 10);
+    return ordenadas.filter((s) => s.fecha >= minStr && s.fecha <= maxStr);
+  }
+  return ordenadas;
+}
 
 function esc(str) {
   if (str === null || str === undefined) return '';
@@ -232,6 +258,11 @@ function renderSessionCard(sesion, actionHtml = '') {
           ${
             sesion.ritmo
               ? `<div class="flex items-center gap-1.5"><i data-lucide="gauge" class="size-4 text-muted-foreground"></i><dd class="font-medium tabular-nums">${esc(sesion.ritmo)}</dd></div>`
+              : ''
+          }
+          ${
+            sesion.series
+              ? `<div class="flex items-center gap-1.5"><i data-lucide="repeat" class="size-4 text-muted-foreground"></i><dd class="font-medium">${esc(sesion.series)}</dd></div>`
               : ''
           }
           ${
@@ -1227,26 +1258,58 @@ function viewCoachAtletaFicha(atletaId) {
   let tabContent = '';
 
   if (State.fichaTab === 'plan') {
-    const sesiones = Helpers.getPlan(atleta.id);
+    const todasSesiones = Helpers.getPlan(atleta.id);
+    const sesiones = filtrarSesionesPorPeriodo(todasSesiones, State.planFiltro);
     const total = sesiones.reduce((t, s) => t + (s.distanciaKm || 0), 0);
     const hecho = sesiones.filter((s) => s.estado === 'realizado').reduce((t, s) => t + (s.distanciaKm || 0), 0);
+    const filtrosPlan = [
+      { id: 'todas', label: 'Todas' },
+      { id: 'semana', label: 'Semana' },
+      { id: 'mes', label: 'Mes' },
+      { id: 'dia', label: 'Hoy (Día)' },
+    ];
 
     tabContent = `
       <div class="grid gap-6 xl:grid-cols-[1fr_20rem]">
         <section>
           <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 class="text-2xl font-bold">Planificación semanal</h2>
-              <p class="text-sm text-muted-foreground">${hecho} de ${total} km realizados</p>
+              <h2 class="text-2xl font-bold">Planificación de entrenamientos</h2>
+              <p class="text-sm text-muted-foreground">${hecho.toFixed(1).replace(/\.0$/, '')} de ${total.toFixed(1).replace(/\.0$/, '')} km realizados (${sesiones.length} sesiones visibles)</p>
             </div>
-            <button type="button" onclick="openSessionModal('${atleta.id}')" class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-95">
-              <i data-lucide="plus" class="size-4"></i> Agregar entrenamiento
-            </button>
+            <div class="flex flex-wrap items-center gap-2">
+              <button type="button" onclick="openDuplicarPlanModal('${atleta.id}')" class="inline-flex items-center gap-1.5 rounded-lg border bg-card px-3.5 py-2 text-sm font-semibold hover:bg-muted">
+                <i data-lucide="copy" class="size-4"></i> Duplicar semana / Copiar plan
+              </button>
+              <button type="button" onclick="openSessionModal('${atleta.id}')" class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-95">
+                <i data-lucide="plus" class="size-4"></i> Agregar entrenamiento
+              </button>
+            </div>
+          </div>
+          <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <div class="flex gap-1 rounded-lg bg-muted p-1">
+              ${filtrosPlan
+                .map(
+                  (f) => `
+                <button
+                  type="button"
+                  onclick="State.planFiltro = '${f.id}'; renderApp()"
+                  class="rounded-md px-3 py-1 text-xs font-semibold ${
+                    State.planFiltro === f.id ? 'bg-card shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  }"
+                >
+                  ${f.label}
+                </button>
+              `
+                )
+                .join('')}
+            </div>
+            <span class="text-xs text-muted-foreground">Podés asignar sesiones individuales, por categoría o a todo el grupo</span>
           </div>
           ${
             sesiones.length === 0
               ? `<div class="rounded-xl border border-dashed p-10 text-center text-muted-foreground">
-                  Todavía no hay entrenamientos cargados para esta semana.
+                  Todavía no hay entrenamientos cargados para este período.
                 </div>`
               : `<div class="space-y-3">
                   ${sesiones
@@ -1277,12 +1340,7 @@ function viewCoachAtletaFicha(atletaId) {
       </div>
     `;
   } else if (State.fichaTab === 'ficha') {
-    const datoRow = (label, valor) => `
-      <div class="grid gap-0.5 py-2.5 sm:grid-cols-[12rem_1fr]">
-        <dt class="text-sm text-muted-foreground">${esc(label)}</dt>
-        <dd class="text-sm font-medium">${esc(valor || '—')}</dd>
-      </div>
-    `;
+    const niveles = ['Inicial', 'Intermedio', 'Avanzado', 'Competitivo'];
     tabContent = `
       <div class="grid gap-6 lg:grid-cols-2">
         <div class="space-y-6">
@@ -1336,8 +1394,16 @@ function viewCoachAtletaFicha(atletaId) {
                 <label class="text-xs font-medium text-muted-foreground">Contacto de emergencia / Familia</label>
                 <input id="dp-emerg" value="${esc(atleta.contactoEmergencia || '')}" class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-sm" />
               </div>
+              <div class="rounded-lg border bg-muted/40 p-3">
+                <label class="flex items-start gap-2.5 text-xs font-medium cursor-pointer">
+                  <input id="dp-excluir-ranking" type="checkbox" ${atleta.excluirRanking ? 'checked' : ''} class="mt-0.5 size-4 rounded border" />
+                  <span>
+                    <strong>Privacidad en Ranking Público:</strong> Excluir a este atleta del ranking público si la familia no autoriza su publicación.
+                  </span>
+                </label>
+              </div>
               <button type="submit" class="inline-flex h-9 items-center justify-center rounded-lg bg-secondary px-4 text-xs font-semibold text-secondary-foreground hover:opacity-90">
-                Guardar datos personales
+                Guardar datos personales y privacidad
               </button>
             </form>
           </section>
@@ -1381,24 +1447,73 @@ function viewCoachAtletaFicha(atletaId) {
           </section>
         </div>
 
-        <section class="rounded-xl border bg-card p-5 h-fit">
-          <h2 class="text-2xl font-bold">Información deportiva</h2>
-          <dl class="mt-2 divide-y">
-            ${datoRow('Nivel', atleta.nivel)}
-            ${datoRow('Antecedentes', atleta.antecedentes)}
-            ${datoRow('Salud y lesiones', atleta.salud)}
-            ${(atleta.extra || []).map((x) => datoRow(x.etiqueta, x.valor)).join('')}
-          </dl>
-          <form onsubmit="addExtraField(event, '${atleta.id}')" class="mt-4 rounded-lg bg-muted/60 p-3">
-            <p class="mb-2 text-sm font-semibold">Agregar información adicional</p>
-            <div class="grid gap-2 sm:grid-cols-[10rem_1fr_auto]">
-              <input id="extra-et" placeholder="Ej.: Talle" required class="h-9 rounded-lg border bg-card px-3 text-sm" />
-              <input id="extra-val" placeholder="Ej.: M" required class="h-9 rounded-lg border bg-card px-3 text-sm" />
-              <button type="submit" class="inline-flex h-9 items-center justify-center gap-1 rounded-lg bg-secondary px-3 text-sm font-semibold text-secondary-foreground hover:opacity-90">
-                <i data-lucide="plus" class="size-4"></i> Agregar
-              </button>
+        <section class="rounded-xl border bg-card p-5 h-fit space-y-5">
+          <div>
+            <h2 class="text-2xl font-bold">Información deportiva y observaciones</h2>
+            <p class="text-xs text-muted-foreground">Antecedentes, pruebas que practica, apto médico y observaciones libres del entrenador.</p>
+          </div>
+          <form onsubmit="saveInfoDeportivaAtleta(event, '${atleta.id}')" class="space-y-3">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs font-medium text-muted-foreground">Nivel deportivo</label>
+                <select id="id-nivel" class="mt-1 h-9 w-full rounded-lg border bg-card px-2 text-sm">
+                  ${niveles.map((n) => `<option value="${n}" ${(atleta.nivel || 'Inicial') === n ? 'selected' : ''}>${n}</option>`).join('')}
+                </select>
+              </div>
+              <div>
+                <label class="text-xs font-medium text-muted-foreground">Pruebas que practica</label>
+                <input id="id-pruebas" value="${esc(atleta.pruebas || '800 m, 1500 m, Cross')}" placeholder="Ej.: 80 m, 150 m, 1500 m, Cross" class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-sm" />
+              </div>
             </div>
+            <div>
+              <label class="text-xs font-medium text-muted-foreground">Antecedentes deportivos</label>
+              <input id="id-antecedentes" value="${esc(atleta.antecedentes || '')}" placeholder="Ej.: Iniciación en Escuela Municipal, Juegos Rionegrinos…" class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-sm" />
+            </div>
+            <div>
+              <label class="text-xs font-medium text-muted-foreground">Salud, apto físico y lesiones</label>
+              <input id="id-salud" value="${esc(atleta.salud || '')}" placeholder="Ej.: Apto médico vigente. Sin lesiones." class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-sm" />
+            </div>
+            <div>
+              <label class="text-xs font-medium text-muted-foreground">Observaciones libres del entrenador</label>
+              <textarea id="id-observaciones" rows="4" placeholder="Anotaciones técnicas, evolución, conducta, disponibilidad horaria o comentarios adicionales del entrenador…" class="mt-1 w-full rounded-lg border bg-card p-3 text-sm">${esc(atleta.observacionesEntrenador || '')}</textarea>
+            </div>
+            <button type="submit" class="inline-flex h-9 items-center justify-center rounded-lg bg-secondary px-4 text-xs font-semibold text-secondary-foreground hover:opacity-90">
+              Guardar información deportiva y observaciones
+            </button>
           </form>
+
+          <div class="border-t pt-4">
+            <p class="text-sm font-semibold">Campos adicionales personalizados</p>
+            ${
+              (atleta.extra || []).length === 0
+                ? `<p class="mt-1 text-xs text-muted-foreground">Sin campos adicionales cargados.</p>`
+                : `<dl class="mt-2 divide-y">
+                    ${(atleta.extra || [])
+                      .map(
+                        (x, idx) => `
+                      <div class="flex items-center justify-between py-2 text-sm">
+                        <div>
+                          <span class="text-muted-foreground">${esc(x.etiqueta)}:</span>
+                          <span class="ml-1 font-medium">${esc(x.valor)}</span>
+                        </div>
+                        <button type="button" onclick="deleteExtraField('${atleta.id}', ${idx})" class="text-xs text-muted-foreground hover:text-destructive" title="Eliminar campo">✕</button>
+                      </div>
+                    `
+                      )
+                      .join('')}
+                  </dl>`
+            }
+            <form onsubmit="addExtraField(event, '${atleta.id}')" class="mt-3 rounded-lg bg-muted/60 p-3">
+              <p class="mb-2 text-xs font-semibold">Agregar dato extra (ej.: Talle de remera, Obra social, Calzado)</p>
+              <div class="grid gap-2 sm:grid-cols-[9rem_1fr_auto]">
+                <input id="extra-et" placeholder="Ej.: Talle" required class="h-9 rounded-lg border bg-card px-3 text-sm" />
+                <input id="extra-val" placeholder="Ej.: M" required class="h-9 rounded-lg border bg-card px-3 text-sm" />
+                <button type="submit" class="inline-flex h-9 items-center justify-center gap-1 rounded-lg bg-secondary px-3 text-sm font-semibold text-secondary-foreground hover:opacity-90">
+                  <i data-lucide="plus" class="size-4"></i> Agregar
+                </button>
+              </div>
+            </form>
+          </div>
         </section>
       </div>
     `;
@@ -1501,44 +1616,83 @@ function viewCoachAtletaFicha(atletaId) {
     const deuda = lista.filter((p) => p.estado !== 'pagado').reduce((t, p) => t + p.monto, 0);
     tabContent = `
       <section class="rounded-xl border bg-card">
-        <div class="flex items-center justify-between border-b px-5 py-4">
-          <h2 class="text-2xl font-bold">Cuotas y pagos</h2>
-          <p class="text-sm">
-            Saldo:
-            <span class="${deuda > 0 ? 'font-semibold text-destructive' : 'font-semibold text-success'}">
-              ${deuda > 0 ? Helpers.pesos(deuda) : 'al día'}
-            </span>
-          </p>
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
+          <div>
+            <h2 class="text-2xl font-bold">Cuotas y pagos de ${esc(atleta.nombre)}</h2>
+            <p class="text-sm text-muted-foreground">
+              Saldo pendiente:
+              <span class="${deuda > 0 ? 'font-semibold text-destructive' : 'font-semibold text-success'}">
+                ${deuda > 0 ? Helpers.pesos(deuda) : 'al día'}
+              </span>
+            </p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <button type="button" onclick="openConceptosCobroModal()" class="inline-flex items-center gap-1.5 rounded-lg border bg-card px-3 py-1.5 text-xs font-semibold hover:bg-muted">
+              <i data-lucide="settings-2" class="size-3.5"></i> Valores y conceptos
+            </button>
+            <button type="button" onclick="openNuevoCobroModal('${atleta.id}')" class="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-95">
+              <i data-lucide="plus" class="size-3.5"></i> Cargar cobro
+            </button>
+          </div>
         </div>
-        <ul class="divide-y">
-          ${lista
-            .map(
-              (p) => `
-            <li class="flex flex-wrap items-center gap-3 px-5 py-3">
-              <div class="min-w-0 flex-1">
-                <p class="font-medium">${esc(p.detalle)}</p>
-                <p class="text-xs text-muted-foreground">
-                  ${esc(p.concepto)} · ${
-                p.estado === 'pagado' && p.fechaPago
-                  ? `pagado el ${Helpers.fechaCorta(p.fechaPago)}`
-                  : `vence ${Helpers.fechaCorta(p.vencimiento)}`
-              }
-                </p>
-              </div>
-              <span class="font-semibold tabular-nums">${Helpers.pesos(p.monto)}</span>
-              ${renderEstadoPagoBadge(p.estado)}
-              ${
-                p.estado !== 'pagado'
-                  ? `<button type="button" onclick="registrarPago('${p.id}')" class="rounded-lg border bg-card px-3 py-1.5 text-xs font-semibold hover:bg-muted">
-                      Registrar pago
-                    </button>`
-                  : ''
-              }
-            </li>
-          `
-            )
-            .join('')}
-        </ul>
+        ${
+          lista.length === 0
+            ? `<div class="p-8 text-center text-sm text-muted-foreground">
+                No hay cobros cargados para ${esc(atleta.nombre)}.
+              </div>`
+            : `<ul class="divide-y">
+                ${lista
+                  .map(
+                    (p) => `
+                  <li class="flex flex-wrap items-center gap-3 px-5 py-3">
+                    <div class="min-w-0 flex-1">
+                      <p class="font-medium">${esc(p.detalle)}</p>
+                      <p class="text-xs text-muted-foreground">
+                        <span class="font-semibold text-foreground">${esc(p.concepto)}</span> · ${
+                      p.estado === 'pagado' && p.fechaPago
+                        ? `pagado el ${Helpers.fechaCorta(p.fechaPago)}`
+                        : `vence ${Helpers.fechaCorta(p.vencimiento)}`
+                    }
+                        ${
+                          p.estado === 'pagado' && p.medioPago
+                            ? ` · <span class="font-semibold text-foreground">${p.medioPago === 'efectivo' ? '💵 Efectivo' : '💸 Transferencia'}</span>`
+                            : ''
+                        }
+                        ${p.notaPago ? ` · <em>“${esc(p.notaPago)}”</em>` : ''}
+                      </p>
+                    </div>
+                    <span class="font-semibold tabular-nums">${Helpers.pesos(p.monto)}</span>
+                    ${renderEstadoPagoBadge(p.estado)}
+                    <div class="inline-flex flex-wrap items-center gap-1.5">
+                      ${
+                        p.comprobanteDataUrl
+                          ? `<button type="button" onclick="verComprobanteModal('${p.id}')" class="inline-flex items-center gap-1 rounded-lg border border-primary/40 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/20">
+                              📎 Ver comprobante
+                            </button>`
+                          : ''
+                      }
+                      ${
+                        p.estado !== 'pagado'
+                          ? `<button type="button" onclick="openRegistrarPagoModal('${p.id}')" class="rounded-lg border bg-card px-3 py-1.5 text-xs font-semibold hover:bg-muted">
+                              Registrar pago
+                            </button>`
+                          : `<button type="button" onclick="openRegistrarPagoModal('${p.id}')" class="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground" title="Cambiar medio de pago o adjuntar comprobante">
+                              ${p.comprobanteDataUrl || p.medioPago ? 'Medio/Comprobante' : '+ Comprobante'}
+                            </button>`
+                      }
+                      <button type="button" onclick="openNuevoCobroModal('${atleta.id}', '${p.id}')" class="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground" title="Editar valor o concepto">
+                        Editar
+                      </button>
+                      <button type="button" onclick="deletePago('${p.id}')" class="rounded px-1.5 py-1 text-xs text-muted-foreground hover:text-destructive" title="Eliminar cobro">
+                        ✕
+                      </button>
+                    </div>
+                  </li>
+                `
+                  )
+                  .join('')}
+              </ul>`
+        }
       </section>
     `;
   } else if (State.fichaTab === 'mensajes') {
@@ -1656,8 +1810,35 @@ window.saveDatosPersonalesAtleta = (e, atletaId) => {
   a.telefono = document.getElementById('dp-tel').value.trim();
   a.email = document.getElementById('dp-email').value.trim();
   a.contactoEmergencia = document.getElementById('dp-emerg').value.trim();
+  const exclEl = document.getElementById('dp-excluir-ranking');
+  if (exclEl) {
+    a.excluirRanking = Boolean(exclEl.checked);
+  }
   saveDB();
   showToast(`Datos personales de ${a.nombre} actualizados`);
+  renderApp();
+};
+
+window.saveInfoDeportivaAtleta = (e, atletaId) => {
+  e.preventDefault();
+  const a = Helpers.getAtleta(atletaId);
+  if (!a) return;
+  a.nivel = document.getElementById('id-nivel').value;
+  a.pruebas = document.getElementById('id-pruebas').value.trim();
+  a.antecedentes = document.getElementById('id-antecedentes').value.trim();
+  a.salud = document.getElementById('id-salud').value.trim();
+  a.observacionesEntrenador = document.getElementById('id-observaciones').value.trim();
+  saveDB();
+  showToast(`Información deportiva y observaciones de ${a.nombre} guardadas`);
+  renderApp();
+};
+
+window.deleteExtraField = (atletaId, idx) => {
+  const a = Helpers.getAtleta(atletaId);
+  if (!a || !Array.isArray(a.extra)) return;
+  a.extra.splice(idx, 1);
+  saveDB();
+  showToast('Campo adicional eliminado');
   renderApp();
 };
 
@@ -1738,7 +1919,7 @@ function viewCoachCompetencias() {
   const content = `
     ${renderPageHeader(
       'Competencias',
-      'Calendario del equipo, inscripciones y sugerencias',
+      'Calendario del equipo, inscripciones, sugerencias y carga de resultados',
       `<button type="button" onclick="openNuevaCompetenciaModal()" class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-95">
         <i data-lucide="plus" class="size-4"></i> Nueva competencia
       </button>`
@@ -1803,7 +1984,7 @@ function viewCoachCompetencias() {
                   </div>
                 </div>
               </div>
-              <div class="md:w-56 flex flex-col gap-2">
+              <div class="md:w-60 flex flex-col gap-2">
                 ${
                   disponibles.length > 0
                     ? `<select onchange="if(this.value) sugerirCompetencia('${c.id}', this.value)" class="h-10 w-full rounded-lg border bg-card px-3 text-sm">
@@ -1818,6 +1999,12 @@ function viewCoachCompetencias() {
                   <option value="">Inscribir a…</option>
                   ${DB.atletas
                     .filter((a) => !c.inscriptos.includes(a.id))
+                    .map((a) => `<option value="${a.id}">${esc(a.nombre)} ${esc(a.apellido)}</option>`)
+                    .join('')}
+                </select>
+                <select onchange="if(this.value) { openNuevoResultadoModal(this.value, '${esc(c.nombre)}', '${esc(c.fecha)}'); this.value=''; }" class="h-10 w-full rounded-lg border border-primary/40 bg-primary/5 px-3 text-sm font-medium text-primary">
+                  <option value="">⏱️ Registrar resultado / marca a…</option>
+                  ${DB.atletas
                     .map((a) => `<option value="${a.id}">${esc(a.nombre)} ${esc(a.apellido)}</option>`)
                     .join('')}
                 </select>
@@ -1865,14 +2052,40 @@ window.inscribirCompetencia = (compId, atletaId) => {
   }
 };
 
+function getConceptosCobroList() {
+  if (!Array.isArray(DB.conceptosCobro) || DB.conceptosCobro.length === 0) {
+    DB.conceptosCobro = [
+      { id: 'cuota', nombre: 'Cuota', montoSugerido: 15000, detalleSugerido: 'Cuota mensual' },
+      { id: 'indumentaria', nombre: 'Indumentaria', montoSugerido: 25000, detalleSugerido: 'Indumentaria del equipo' },
+      { id: 'viajes-competencias', nombre: 'Viajes y Competencias', montoSugerido: 20000, detalleSugerido: 'Viaje y participación en competencia' },
+    ];
+  }
+  return DB.conceptosCobro;
+}
+
 function viewCoachPagos() {
+  // Control automático de vencimientos: si un pago pendiente ya superó la fecha de hoy, pasa a vencido
+  const hoyStr = DB.hoy || new Date().toISOString().slice(0, 10);
+  DB.pagos.forEach((p) => {
+    if (p.estado === 'pendiente' && p.vencimiento && p.vencimiento < hoyStr) {
+      p.estado = 'vencido';
+    }
+  });
+
   const filtrosEstado = [
     { id: 'Todos', label: 'Todos' },
     { id: 'vencido', label: 'Vencidos' },
     { id: 'pendiente', label: 'Pendientes' },
     { id: 'pagado', label: 'Pagados' },
   ];
-  const conceptos = ['Todos', 'Cuota', 'Indumentaria', 'Inscripción', 'Viaje'];
+  const catalogoConceptos = getConceptosCobroList();
+  const nombresConceptos = Array.from(
+    new Set([
+      ...catalogoConceptos.map((c) => c.nombre),
+      ...DB.pagos.map((p) => p.concepto).filter(Boolean),
+    ])
+  );
+  const conceptos = ['Todos', ...nombresConceptos];
 
   const suma = (e) => DB.pagos.filter((p) => p.estado === e).reduce((t, p) => t + p.monto, 0);
   const filas = DB.pagos
@@ -1884,13 +2097,36 @@ function viewCoachPagos() {
     .slice()
     .sort((a, b) => a.vencimiento.localeCompare(b.vencimiento));
 
+  // Listado de morosos / saldo deudor por atleta
+  const morosos = DB.atletas
+    .map((a) => {
+      const pagosAtleta = DB.pagos.filter((p) => p.atletaId === a.id && p.estado !== 'pagado');
+      const deudaTotal = pagosAtleta.reduce((t, p) => t + (Number(p.monto) || 0), 0);
+      const deudaVencida = pagosAtleta
+        .filter((p) => p.estado === 'vencido')
+        .reduce((t, p) => t + (Number(p.monto) || 0), 0);
+      return {
+        atleta: a,
+        deudaTotal,
+        deudaVencida,
+        cantidadItems: pagosAtleta.length,
+      };
+    })
+    .filter((m) => m.deudaTotal > 0)
+    .sort((a, b) => b.deudaVencida - a.deudaVencida || b.deudaTotal - a.deudaTotal);
+
   const content = `
     ${renderPageHeader(
-      'Pagos',
-      'Cuotas, indumentaria, inscripciones y viajes',
-      `<button type="button" onclick="openNuevoCobroModal()" class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-95">
-        <i data-lucide="plus" class="size-4"></i> Nuevo cobro
-      </button>`
+      'Pagos y Cobranzas',
+      'Gestión de cuotas, indumentaria, viajes y competencias, control de vencimientos y listado de morosos',
+      `<div class="flex flex-wrap items-center gap-2">
+        <button type="button" onclick="openConceptosCobroModal()" class="inline-flex items-center gap-2 rounded-lg border bg-card px-3.5 py-2 text-sm font-semibold hover:bg-muted">
+          <i data-lucide="settings-2" class="size-4"></i> Configurar conceptos y valores
+        </button>
+        <button type="button" onclick="openNuevoCobroModal()" class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-95">
+          <i data-lucide="plus" class="size-4"></i> Nuevo cobro
+        </button>
+      </div>`
     )}
     <div class="space-y-6 px-4 py-6 sm:px-8">
       <div class="grid gap-4 sm:grid-cols-3">
@@ -1907,6 +2143,83 @@ function viewCoachPagos() {
           <p class="mt-1 font-display text-4xl font-bold tabular-nums text-success">${Helpers.pesos(suma('pagado'))}</p>
         </div>
       </div>
+
+      <!-- Listado de Morosos y Saldo Deudor por Atleta -->
+      <section class="rounded-xl border bg-card p-5">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="text-xl font-bold">Control de saldo deudor y listado de morosos (${morosos.length})</h2>
+            <p class="text-xs text-muted-foreground">Atletas con cuotas o conceptos vencidos o pendientes de pago.</p>
+          </div>
+        </div>
+        ${
+          morosos.length === 0
+            ? `<div class="mt-3 rounded-lg bg-success-soft/50 px-4 py-3 text-sm font-medium text-success">
+                ✓ Todos los atletas de la escuela se encuentran al día con sus pagos.
+              </div>`
+            : `<div class="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                ${morosos
+                  .map(
+                    (m) => `
+                  <a href="#/entrenador/atletas/${m.atleta.id}" onclick="State.fichaTab='pagos'" class="flex items-center justify-between rounded-xl border p-3 transition-colors hover:bg-muted/50 ${
+                    m.deudaVencida > 0 ? 'border-destructive/40 bg-destructive/5' : 'bg-card'
+                  }">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                      ${renderAvatar(m.atleta.nombre, m.atleta.apellido, 'size-9 text-xs')}
+                      <div class="min-w-0">
+                        <p class="truncate text-sm font-bold">${esc(Helpers.nombreCompleto(m.atleta))}</p>
+                        <p class="text-xs text-muted-foreground">${m.cantidadItems} concepto${m.cantidadItems === 1 ? '' : 's'} · ${
+                          m.deudaVencida > 0 ? `<span class="font-semibold text-destructive">Vencido: ${Helpers.pesos(m.deudaVencida)}</span>` : 'Pendiente'
+                        }</p>
+                      </div>
+                    </div>
+                    <div class="text-right pl-2">
+                      <p class="font-display text-xl font-bold tabular-nums ${m.deudaVencida > 0 ? 'text-destructive' : 'text-warning-text'}">${Helpers.pesos(m.deudaTotal)}</p>
+                      <span class="text-[11px] font-semibold text-primary">Ver cuenta →</span>
+                    </div>
+                  </a>
+                `
+                  )
+                  .join('')}
+              </div>`
+        }
+      </section>
+
+      <!-- Panel de Conceptos y Valores de Cobro Vigentes -->
+      <section class="rounded-xl border bg-card p-5">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="text-xl font-bold">Conceptos y valores de cobro</h2>
+            <p class="text-xs text-muted-foreground">Hacé clic en un concepto para cargar un cobro rápido o configurá sus valores base y agregá nuevos conceptos.</p>
+          </div>
+          <button type="button" onclick="openConceptosCobroModal()" class="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold hover:bg-muted">
+            <i data-lucide="plus" class="size-3.5"></i> Editar valores / Crear concepto
+          </button>
+        </div>
+        <div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          ${catalogoConceptos
+            .map(
+              (c) => `
+            <div class="flex flex-col justify-between rounded-xl border bg-muted/30 p-3.5">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-primary">${esc(c.nombre)}</p>
+                <p class="mt-1 font-display text-3xl font-bold tabular-nums">${Helpers.pesos(Number(c.montoSugerido) || 0)}</p>
+                <p class="mt-0.5 truncate text-xs text-muted-foreground" title="${esc(c.detalleSugerido || '')}">${esc(c.detalleSugerido || c.nombre)}</p>
+              </div>
+              <div class="mt-3 flex items-center justify-between border-t pt-2.5">
+                <button type="button" onclick="openNuevoCobroModal(null, null, '${esc(c.nombre)}')" class="text-xs font-semibold text-primary hover:underline">
+                  + Aplicar cobro →
+                </button>
+                <button type="button" onclick="openConceptosCobroModal()" class="text-xs text-muted-foreground hover:text-foreground">
+                  Cambiar valor
+                </button>
+              </div>
+            </div>
+          `
+            )
+            .join('')}
+        </div>
+      </section>
 
       <div class="flex flex-col gap-3 md:flex-row md:justify-between">
         <div class="flex gap-1 rounded-lg bg-muted p-1 self-start">
@@ -1932,12 +2245,12 @@ function viewCoachPagos() {
               (c) => `
             <button
               type="button"
-              onclick="State.pagosConcepto = '${c}'; renderApp()"
+              onclick="State.pagosConcepto = '${esc(c)}'; renderApp()"
               class="rounded-full border px-3 py-1 text-sm font-medium ${
                 State.pagosConcepto === c ? 'border-ink bg-ink text-ink-foreground' : 'bg-card hover:bg-muted'
               }"
             >
-              ${c}
+              ${esc(c)}
             </button>
           `
             )
@@ -1973,21 +2286,39 @@ function viewCoachPagos() {
                           </a>
                         </td>
                         <td class="px-3 py-3">
-                          <p>${esc(p.detalle)}</p>
-                          <p class="text-xs text-muted-foreground">${esc(p.concepto)}</p>
+                          <p class="font-medium">${esc(p.detalle)}</p>
+                          <p class="text-xs text-muted-foreground">
+                            ${esc(p.concepto)}
+                            ${
+                              p.estado === 'pagado' && p.medioPago
+                                ? ` · <span class="font-semibold text-foreground">${p.medioPago === 'efectivo' ? '💵 Efectivo' : '💸 Transferencia'}</span>`
+                                : ''
+                            }
+                            ${p.notaPago ? ` · <em>“${esc(p.notaPago)}”</em>` : ''}
+                          </p>
                         </td>
                         <td class="px-3 py-3 tabular-nums">${Helpers.fechaCorta(p.vencimiento)}</td>
                         <td class="px-3 py-3 text-right font-semibold tabular-nums">${Helpers.pesos(p.monto)}</td>
                         <td class="px-3 py-3">${renderEstadoPagoBadge(p.estado)}</td>
                         <td class="px-5 py-3 text-right">
-                          <div class="inline-flex items-center gap-2">
+                          <div class="inline-flex flex-wrap items-center justify-end gap-2">
                             ${
-                              p.estado !== 'pagado'
-                                ? `<button type="button" onclick="registrarPago('${p.id}')" class="rounded-lg border bg-card px-3 py-1.5 text-xs font-semibold hover:bg-muted">
-                                    Registrar pago
+                              p.comprobanteDataUrl
+                                ? `<button type="button" onclick="verComprobanteModal('${p.id}')" class="inline-flex items-center gap-1 rounded-lg border border-primary/40 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/20">
+                                    📎 Ver comprobante
                                   </button>`
                                 : ''
                             }
+                            ${
+                              p.estado !== 'pagado'
+                                ? `<button type="button" onclick="openRegistrarPagoModal('${p.id}')" class="rounded-lg border bg-card px-3 py-1.5 text-xs font-semibold hover:bg-muted">
+                                    Registrar pago
+                                  </button>`
+                                : `<button type="button" onclick="openRegistrarPagoModal('${p.id}')" class="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground" title="Cambiar medio de pago o adjuntar comprobante">
+                                    ${p.comprobanteDataUrl || p.medioPago ? 'Medio/Comprobante' : '+ Comprobante'}
+                                  </button>`
+                            }
+                            <button type="button" onclick="openNuevoCobroModal('${a.id}', '${p.id}')" title="Editar valor o concepto" class="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">Editar</button>
                             <button type="button" onclick="deletePago('${p.id}')" title="Eliminar cobro" class="text-xs text-muted-foreground hover:text-destructive">✕</button>
                           </div>
                         </td>
@@ -2004,15 +2335,221 @@ function viewCoachPagos() {
   return renderCoachShell('pagos', content);
 }
 
+let tempComprobanteDataUrl = null;
+let tempMedioPago = 'transferencia';
+
 window.registrarPago = (id) => {
-  const pago = DB.pagos.find((p) => p.id === id);
-  if (pago) {
-    pago.estado = 'pagado';
-    pago.fechaPago = DB.hoy;
-    saveDB();
-    showToast('Pago registrado');
-    renderApp();
-  }
+  window.openRegistrarPagoModal(id);
+};
+
+window.openRegistrarPagoModal = (pagoId) => {
+  const pago = DB.pagos.find((p) => p.id === pagoId);
+  if (!pago) return;
+  tempComprobanteDataUrl = pago.comprobanteDataUrl || null;
+  tempMedioPago = pago.medioPago || 'transferencia';
+  renderRegistrarPagoModalContent(pago);
+};
+
+function renderRegistrarPagoModalContent(pago) {
+  const atleta = Helpers.getAtleta(pago.atletaId);
+  const fechaPagoVal = document.getElementById('rp-fecha')?.value || pago.fechaPago || DB.hoy;
+  const notaVal = document.getElementById('rp-nota')?.value ?? (pago.notaPago || '');
+
+  showModalHtml(`
+    <div class="flex items-start justify-between">
+      <div>
+        <h2 class="text-xl font-bold">${pago.estado === 'pagado' ? 'Detalle y comprobante de pago' : 'Registrar pago'}</h2>
+        <p class="text-sm text-muted-foreground">
+          ${atleta ? `${esc(Helpers.nombreCompleto(atleta))} · ` : ''}<strong>${esc(pago.detalle || pago.concepto)}</strong> (${Helpers.pesos(pago.monto)})
+        </p>
+      </div>
+      <button type="button" onclick="closeModal()" class="text-muted-foreground hover:text-foreground">✕</button>
+    </div>
+
+    <form onsubmit="saveRegistrarPagoModal(event, '${pago.id}')" class="mt-4 space-y-4">
+      <div>
+        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Medio de pago</label>
+        <div class="grid grid-cols-2 gap-2.5">
+          <button
+            type="button"
+            onclick="setTempMedioPago('transferencia', '${pago.id}')"
+            class="flex items-center justify-center gap-2 rounded-xl border py-3 px-3 text-sm font-semibold transition-colors ${
+              tempMedioPago === 'transferencia'
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'bg-card hover:bg-muted text-foreground'
+            }"
+          >
+            💸 Transferencia
+          </button>
+          <button
+            type="button"
+            onclick="setTempMedioPago('efectivo', '${pago.id}')"
+            class="flex items-center justify-center gap-2 rounded-xl border py-3 px-3 text-sm font-semibold transition-colors ${
+              tempMedioPago === 'efectivo'
+                ? 'border-success bg-success-soft text-success'
+                : 'bg-card hover:bg-muted text-foreground'
+            }"
+          >
+            💵 Pago en Efectivo
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-medium">Fecha de pago</label>
+          <input id="rp-fecha" type="date" required value="${esc(fechaPagoVal)}" class="mt-1 h-10 w-full rounded-lg border bg-card px-3 text-sm" />
+        </div>
+        <div>
+          <label class="text-xs font-medium">Referencia / Nota (opcional)</label>
+          <input id="rp-nota" value="${esc(notaVal)}" placeholder="${tempMedioPago === 'efectivo' ? 'Ej.: Entregado en mano al profe' : 'Ej.: Comprobante MP / Banco'}" class="mt-1 h-10 w-full rounded-lg border bg-card px-3 text-sm" />
+        </div>
+      </div>
+
+      <div class="rounded-xl border border-dashed bg-muted/30 p-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p class="text-sm font-semibold">
+              ${tempMedioPago === 'transferencia' ? '📎 Comprobante de transferencia (foto o captura)' : '📎 Adjuntar recibo / comprobante (opcional)'}
+            </p>
+            <p class="text-xs text-muted-foreground">Podés subir una foto o captura desde el celular o la computadora.</p>
+          </div>
+          <label class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-secondary px-3 py-2 text-xs font-semibold text-secondary-foreground hover:opacity-90">
+            📷 Elegir imagen
+            <input type="file" accept="image/*" onchange="handleComprobanteFileChange(event, '${pago.id}')" class="hidden" />
+          </label>
+        </div>
+
+        ${
+          tempComprobanteDataUrl
+            ? `<div class="mt-3 rounded-lg border bg-card p-3">
+                <div class="flex items-center justify-between pb-2">
+                  <span class="text-xs font-semibold text-success">✓ Comprobante adjunto listo para guardar</span>
+                  <button type="button" onclick="clearComprobanteTemp('${pago.id}')" class="text-xs font-semibold text-destructive hover:underline">
+                    Quitar imagen
+                  </button>
+                </div>
+                <img src="${tempComprobanteDataUrl}" alt="Vista previa del comprobante" class="max-h-56 w-auto mx-auto rounded-lg border object-contain" />
+              </div>`
+            : `<p class="mt-2 text-xs text-muted-foreground italic">
+                ${tempMedioPago === 'efectivo' ? 'Seleccionaste Pago en Efectivo (no requiere comprobante fotográfico).' : 'Todavía no adjuntaste ninguna imagen del comprobante.'}
+              </p>`
+        }
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="closeModal()" class="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">Cancelar</button>
+        <button type="submit" class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-95">
+          Confirmar pago
+        </button>
+      </div>
+    </form>
+  `);
+}
+
+window.setTempMedioPago = (medio, pagoId) => {
+  tempMedioPago = medio;
+  const pago = DB.pagos.find((p) => p.id === pagoId);
+  if (pago) renderRegistrarPagoModalContent(pago);
+};
+
+window.clearComprobanteTemp = (pagoId) => {
+  tempComprobanteDataUrl = null;
+  const pago = DB.pagos.find((p) => p.id === pagoId);
+  if (pago) renderRegistrarPagoModalContent(pago);
+};
+
+window.handleComprobanteFileChange = (e, pagoId) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      // Comprimir imagen automáticamente en canvas (máx 900px) para sincronización rápida y liviana en Firestore
+      const maxDim = 900;
+      let w = img.width;
+      let h = img.height;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) {
+          h = Math.round((h * maxDim) / w);
+          w = maxDim;
+        } else {
+          w = Math.round((w * maxDim) / h);
+          h = maxDim;
+        }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      tempComprobanteDataUrl = canvas.toDataURL('image/jpeg', 0.72);
+      const pago = DB.pagos.find((p) => p.id === pagoId);
+      if (pago) renderRegistrarPagoModalContent(pago);
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+};
+
+window.saveRegistrarPagoModal = (e, pagoId) => {
+  e.preventDefault();
+  const pago = DB.pagos.find((p) => p.id === pagoId);
+  if (!pago) return;
+  const session = Auth.getSession();
+  pago.estado = 'pagado';
+  pago.medioPago = tempMedioPago;
+  pago.fechaPago = document.getElementById('rp-fecha')?.value || DB.hoy;
+  pago.notaPago = document.getElementById('rp-nota')?.value.trim() || undefined;
+  pago.comprobanteDataUrl = tempComprobanteDataUrl || undefined;
+  pago.registradoPor = session?.role === 'coach' ? 'entrenador' : 'atleta';
+
+  saveDB();
+  closeModal();
+  showToast(
+    tempMedioPago === 'efectivo'
+      ? 'Pago en efectivo registrado correctamente'
+      : 'Pago por transferencia registrado correctamente'
+  );
+  renderApp();
+};
+
+window.verComprobanteModal = (pagoId) => {
+  const pago = DB.pagos.find((p) => p.id === pagoId);
+  if (!pago || !pago.comprobanteDataUrl) return;
+  const atleta = Helpers.getAtleta(pago.atletaId);
+  showModalHtml(`
+    <div class="flex items-start justify-between">
+      <div>
+        <h2 class="text-xl font-bold">Comprobante de pago</h2>
+        <p class="text-sm text-muted-foreground">
+          ${atleta ? `${esc(Helpers.nombreCompleto(atleta))} · ` : ''}${esc(pago.detalle || pago.concepto)} · ${Helpers.pesos(pago.monto)}
+        </p>
+        <p class="mt-0.5 text-xs text-muted-foreground">
+          ${pago.medioPago === 'efectivo' ? '💵 Efectivo' : '💸 Transferencia'} · Fecha: ${Helpers.fechaCorta(pago.fechaPago || DB.hoy)}
+          ${pago.notaPago ? ` · Nota: “${esc(pago.notaPago)}”` : ''}
+        </p>
+      </div>
+      <button type="button" onclick="closeModal()" class="text-muted-foreground hover:text-foreground">✕</button>
+    </div>
+    <div class="mt-4 rounded-xl border bg-muted/30 p-3 text-center">
+      <img src="${pago.comprobanteDataUrl}" alt="Comprobante de pago" class="max-h-[28rem] w-auto mx-auto rounded-lg object-contain" />
+    </div>
+    <div class="mt-4 flex flex-wrap justify-between gap-2">
+      <a href="${pago.comprobanteDataUrl}" download="comprobante-${esc(pago.id)}.jpg" class="inline-flex items-center gap-1.5 rounded-lg border px-3.5 py-2 text-xs font-semibold hover:bg-muted">
+        ⬇️ Descargar comprobante
+      </a>
+      <div class="flex gap-2">
+        <button type="button" onclick="openRegistrarPagoModal('${pago.id}')" class="rounded-lg border px-3.5 py-2 text-xs font-semibold hover:bg-muted">
+          Cambiar imagen / medio
+        </button>
+        <button type="button" onclick="closeModal()" class="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground">
+          Cerrar
+        </button>
+      </div>
+    </div>
+  `);
 };
 
 window.deletePago = (id) => {
@@ -2458,7 +2995,44 @@ function viewAtletaPortal(atletaId, modoFamilia = false) {
   ];
 
   let tabBody = '';
+  const sugeridasCardHtml =
+    sugeridas.length > 0
+      ? `<section class="rounded-xl border border-primary/40 bg-accent/50 p-5">
+          <h2 class="flex items-center gap-2 text-xl font-bold">
+            <i data-lucide="target" class="size-5 text-primary"></i> Tu entrenador te sugiere
+          </h2>
+          <ul class="mt-3 space-y-2.5">
+            ${sugeridas
+              .map(
+                (c) => `
+              <li class="rounded-lg bg-card p-3">
+                <p class="font-semibold">${esc(c.nombre)}</p>
+                <p class="flex items-center gap-1 text-xs text-muted-foreground">
+                  <i data-lucide="calendar-days" class="size-3.5"></i> ${Helpers.fechaCorta(c.fecha)} · ${esc(c.lugar)} · ${esc(c.distancias.join(' / '))}
+                </p>
+                ${
+                  !familia
+                    ? `<button type="button" onclick="inscribirCompetencia('${c.id}', '${atleta.id}')" class="mt-2 inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground hover:opacity-95">
+                        ✓ Confirmar participación
+                      </button>`
+                    : ''
+                }
+              </li>
+            `
+              )
+              .join('')}
+          </ul>
+        </section>`
+      : '';
+
   if (State.portalTab === 'semana') {
+    const sesionesFiltradas = filtrarSesionesPorPeriodo(sesiones, State.planFiltro);
+    const filtrosPlan = [
+      { id: 'todas', label: 'Todas' },
+      { id: 'semana', label: 'Semana' },
+      { id: 'mes', label: 'Mes' },
+      { id: 'dia', label: 'Hoy (Día)' },
+    ];
     tabBody = `
       <div class="grid gap-6 lg:grid-cols-[1fr_23rem]">
         <div class="space-y-3">
@@ -2472,22 +3046,42 @@ function viewAtletaPortal(atletaId, modoFamilia = false) {
                 </div>`
               : ''
           }
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex gap-1 rounded-lg bg-muted p-1">
+              ${filtrosPlan
+                .map(
+                  (f) => `
+                <button
+                  type="button"
+                  onclick="State.planFiltro = '${f.id}'; renderApp()"
+                  class="rounded-md px-3 py-1 text-xs font-semibold ${
+                    State.planFiltro === f.id ? 'bg-card shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  }"
+                >
+                  ${f.label}
+                </button>
+              `
+                )
+                .join('')}
+            </div>
+            <span class="text-xs text-muted-foreground">${sesionesFiltradas.length} entrenamiento${sesionesFiltradas.length === 1 ? '' : 's'}</span>
+          </div>
           ${
-            sesiones.length === 0
+            sesionesFiltradas.length === 0
               ? `<div class="rounded-xl border border-dashed p-10 text-center text-muted-foreground">
-                  Tu entrenador todavía no cargó el plan de esta semana.
+                  No hay entrenamientos cargados para este período.
                 </div>`
-              : sesiones
+              : sesionesFiltradas
                   .map((s) =>
                     renderSessionCard(
                       s,
-                      !familia && s.tipo !== 'Descanso' && s.fecha <= DB.hoy
+                      !familia && s.tipo !== 'Descanso'
                         ? `<button type="button" onclick="openRegistroModal('${atleta.id}', '${s.id}')" class="mt-3 inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-semibold ${
                             s.estado === 'pendiente'
                               ? 'bg-primary text-primary-foreground'
                               : 'hover:bg-muted -ml-2 text-foreground'
                           }">
-                            ${s.estado === 'pendiente' ? 'Registrar' : 'Editar registro'}
+                            ${s.estado === 'pendiente' ? 'Registrar sesión realizada / sensación' : 'Editar registro y sensación'}
                           </button>`
                         : ''
                     )
@@ -2496,6 +3090,7 @@ function viewAtletaPortal(atletaId, modoFamilia = false) {
           }
         </div>
         <aside class="space-y-4">
+          ${sugeridasCardHtml}
           ${renderObjetivosCard(atleta, !familia)}
         </aside>
       </div>
@@ -2547,37 +3142,18 @@ function viewAtletaPortal(atletaId, modoFamilia = false) {
             <h2 class="text-xl font-bold">Mi evolución</h2>
             <div class="mt-3">${renderPaceChart(atleta.evolucion)}</div>
           </section>
-          ${
-            sugeridas.length > 0
-              ? `<section class="rounded-xl border border-primary/40 bg-accent/50 p-5">
-                  <h2 class="flex items-center gap-2 text-xl font-bold">
-                    <i data-lucide="target" class="size-5 text-primary"></i> Tu entrenador te sugiere
-                  </h2>
-                  <ul class="mt-3 space-y-2">
-                    ${sugeridas
-                      .map(
-                        (c) => `
-                      <li class="rounded-lg bg-card p-3">
-                        <p class="font-semibold">${esc(c.nombre)}</p>
-                        <p class="flex items-center gap-1 text-xs text-muted-foreground">
-                          <i data-lucide="calendar-days" class="size-3.5"></i> ${Helpers.fechaCorta(c.fecha)} · ${esc(c.distancias.join(' / '))}
-                        </p>
-                      </li>
-                    `
-                      )
-                      .join('')}
-                  </ul>
-                </section>`
-              : ''
-          }
+          ${sugeridasCardHtml}
         </div>
       </div>
     `;
   } else if (State.portalTab === 'pagos') {
     tabBody = `
       <section class="max-w-3xl rounded-xl border bg-card">
-        <div class="flex items-center justify-between border-b px-5 py-4">
-          <h2 class="text-2xl font-bold">Mis pagos</h2>
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-4">
+          <div>
+            <h2 class="text-2xl font-bold">Mis pagos</h2>
+            <p class="text-xs text-muted-foreground">Podés informar un pago adjuntando la foto del comprobante de transferencia o marcándolo en efectivo.</p>
+          </div>
           <p class="text-sm">
             Saldo:
             <span class="${deuda > 0 ? 'font-semibold text-destructive' : 'font-semibold text-success'}">
@@ -2585,22 +3161,56 @@ function viewAtletaPortal(atletaId, modoFamilia = false) {
             </span>
           </p>
         </div>
-        <ul class="divide-y">
-          ${pagos
-            .map(
-              (p) => `
-            <li class="flex flex-wrap items-center gap-3 px-5 py-3">
-              <div class="min-w-0 flex-1">
-                <p class="font-medium">${esc(p.detalle)}</p>
-                <p class="text-xs text-muted-foreground">${esc(p.concepto)} · vence ${Helpers.fechaCorta(p.vencimiento)}</p>
-              </div>
-              <span class="font-semibold tabular-nums">${Helpers.pesos(p.monto)}</span>
-              ${renderEstadoPagoBadge(p.estado)}
-            </li>
-          `
-            )
-            .join('')}
-        </ul>
+        ${
+          pagos.length === 0
+            ? `<div class="p-8 text-center text-sm text-muted-foreground">No tenés cobros ni cuotas pendientes.</div>`
+            : `<ul class="divide-y">
+                ${pagos
+                  .map(
+                    (p) => `
+                  <li class="flex flex-wrap items-center gap-3 px-5 py-3.5">
+                    <div class="min-w-0 flex-1">
+                      <p class="font-medium">${esc(p.detalle)}</p>
+                      <p class="text-xs text-muted-foreground">
+                        <span class="font-semibold text-foreground">${esc(p.concepto)}</span> · ${
+                      p.estado === 'pagado' && p.fechaPago
+                        ? `pagado el ${Helpers.fechaCorta(p.fechaPago)}`
+                        : `vence ${Helpers.fechaCorta(p.vencimiento)}`
+                    }
+                        ${
+                          p.estado === 'pagado' && p.medioPago
+                            ? ` · <span class="font-semibold text-foreground">${p.medioPago === 'efectivo' ? '💵 Efectivo' : '💸 Transferencia'}</span>`
+                            : ''
+                        }
+                        ${p.notaPago ? ` · <em>“${esc(p.notaPago)}”</em>` : ''}
+                      </p>
+                    </div>
+                    <span class="font-semibold tabular-nums">${Helpers.pesos(p.monto)}</span>
+                    ${renderEstadoPagoBadge(p.estado)}
+                    <div class="inline-flex flex-wrap items-center gap-1.5">
+                      ${
+                        p.comprobanteDataUrl
+                          ? `<button type="button" onclick="verComprobanteModal('${p.id}')" class="inline-flex items-center gap-1 rounded-lg border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20">
+                              📎 Ver comprobante
+                            </button>`
+                          : ''
+                      }
+                      ${
+                        p.estado !== 'pagado'
+                          ? `<button type="button" onclick="openRegistrarPagoModal('${p.id}')" class="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-95">
+                              Registrar pago / Adjuntar comprobante
+                            </button>`
+                          : `<button type="button" onclick="openRegistrarPagoModal('${p.id}')" class="rounded-lg border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground">
+                              ${p.comprobanteDataUrl ? 'Cambiar comprobante' : '+ Adjuntar comprobante'}
+                            </button>`
+                      }
+                    </div>
+                  </li>
+                `
+                  )
+                  .join('')}
+              </ul>`
+        }
       </section>
     `;
   } else if (State.portalTab === 'avisos') {
@@ -3252,7 +3862,7 @@ window.saveAdminProfile = (e) => {
   renderApp();
 };
 
-// 1. Modal de Entrenamiento (Entrenador agrega/modifica sesión)
+// 1. Modal de Entrenamiento (Entrenador agrega/modifica sesión individual o grupal)
 window.openSessionModal = (atletaId, sesionId = null) => {
   const atleta = Helpers.getAtleta(atletaId);
   const sesion = sesionId ? (DB.planes[atletaId] || []).find((s) => s.id === sesionId) : null;
@@ -3261,16 +3871,33 @@ window.openSessionModal = (atletaId, sesionId = null) => {
   const fechaActual = sesion?.fecha || DB.hoy;
   const tipoActual = sesion?.tipo || 'Rodaje';
   const zonaActual = sesion?.intensidad || 'Z2';
+  const categorias = Array.from(new Set(DB.atletas.map((a) => a.categoria).filter(Boolean)));
 
   showModalHtml(`
     <div class="flex items-start justify-between">
       <div>
         <h2 class="text-xl font-bold">${sesion ? 'Modificar entrenamiento' : 'Nuevo entrenamiento'}</h2>
-        <p class="text-sm text-muted-foreground">Plan de ${esc(atleta.nombre)}.${sesion ? ' El atleta verá el aviso de modificación.' : ''}</p>
+        <p class="text-sm text-muted-foreground">Plan de ${esc(atleta.nombre)}.${sesion ? ' El atleta verá el aviso de modificación.' : ' Podés asignarlo individualmente o por grupo.'}</p>
       </div>
       <button type="button" onclick="closeModal()" class="text-muted-foreground hover:text-foreground">✕</button>
     </div>
-    <form onsubmit="saveSessionModal(event, '${atletaId}', '${sesionId || ''}')" class="mt-4 grid gap-4">
+    <form onsubmit="saveSessionModal(event, '${atletaId}', '${sesionId || ''}')" class="mt-4 grid gap-3.5">
+      ${
+        !sesion
+          ? `<div class="space-y-1">
+              <label class="text-xs font-semibold uppercase tracking-wide text-primary">Asignar a (Atleta o Grupo)</label>
+              <select id="s-dest" class="h-10 w-full rounded-lg border bg-card px-3 text-sm font-medium">
+                <option value="${atleta.id}">👤 Solo a ${esc(Helpers.nombreCompleto(atleta))}</option>
+                <option value="__CAT__:${esc(atleta.categoria)}">🏷️ Categoría ${esc(atleta.categoria)} completa</option>
+                <option value="__TODOS__">👥 Todo el grupo (${DB.atletas.length} atletas)</option>
+                ${categorias
+                  .filter((cat) => cat !== atleta.categoria)
+                  .map((cat) => `<option value="__CAT__:${esc(cat)}">🏷️ Categoría ${esc(cat)}</option>`)
+                  .join('')}
+              </select>
+            </div>`
+          : ''
+      }
       <div class="grid grid-cols-2 gap-3">
         <div class="space-y-1">
           <label class="text-sm font-medium">Fecha</label>
@@ -3289,9 +3916,9 @@ window.openSessionModal = (atletaId, sesionId = null) => {
       </div>
       <div class="space-y-1">
         <label class="text-sm font-medium">Descripción</label>
-        <textarea id="s-detalle" rows="3" placeholder="Entrada en calor, bloque principal, vuelta a la calma…" class="w-full rounded-lg border bg-card p-3 text-sm">${esc(sesion?.detalle || '')}</textarea>
+        <textarea id="s-detalle" rows="2" placeholder="Entrada en calor, bloque principal, vuelta a la calma…" class="w-full rounded-lg border bg-card p-3 text-sm">${esc(sesion?.detalle || '')}</textarea>
       </div>
-      <div class="grid grid-cols-2 gap-3">
+      <div class="grid grid-cols-3 gap-3">
         <div class="space-y-1">
           <label class="text-sm font-medium">Distancia (km)</label>
           <input id="s-km" type="number" step="0.1" value="${esc(sesion?.distanciaKm || '')}" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
@@ -3301,12 +3928,18 @@ window.openSessionModal = (atletaId, sesionId = null) => {
           <input id="s-min" type="number" value="${esc(sesion?.duracionMin || '')}" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
         </div>
         <div class="space-y-1">
-          <label class="text-sm font-medium">Ritmo</label>
+          <label class="text-sm font-medium">Ritmo objetivo</label>
           <input id="s-ritmo" value="${esc(sesion?.ritmo || '')}" placeholder="4:15 /km" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="space-y-1">
+          <label class="text-sm font-medium">Series / Repeticiones</label>
+          <input id="s-series" value="${esc(sesion?.series || '')}" placeholder="Ej.: 6 × 400 m o 3 × 1000 m" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
         </div>
         <div class="space-y-1">
           <label class="text-sm font-medium">Recuperación</label>
-          <input id="s-rec" value="${esc(sesion?.recuperacion || '')}" placeholder="2:00 trote" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
+          <input id="s-rec" value="${esc(sesion?.recuperacion || '')}" placeholder="Ej.: 2:00 trote suave" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
         </div>
       </div>
       <div class="space-y-1">
@@ -3331,9 +3964,9 @@ window.saveSessionModal = (e, atletaId, sesionId) => {
   const tipo = document.getElementById('s-tipo').value;
   const kmVal = document.getElementById('s-km').value;
   const minVal = document.getElementById('s-min').value;
+  const seriesVal = document.getElementById('s-series')?.value.trim() || undefined;
 
-  const nueva = {
-    id: existente ? existente.id : `nueva-${Date.now()}`,
+  const baseData = {
     fecha: document.getElementById('s-fecha').value,
     tipo,
     titulo: document.getElementById('s-titulo').value.trim(),
@@ -3341,22 +3974,181 @@ window.saveSessionModal = (e, atletaId, sesionId) => {
     distanciaKm: kmVal ? Number(kmVal) : undefined,
     duracionMin: minVal ? Number(minVal) : undefined,
     ritmo: document.getElementById('s-ritmo').value.trim() || undefined,
+    series: seriesVal,
     intensidad: tipo === 'Descanso' ? undefined : document.getElementById('s-zona').value,
     recuperacion: document.getElementById('s-rec').value.trim() || undefined,
-    estado: existente ? existente.estado : 'pendiente',
-    sensacion: existente?.sensacion,
-    comentario: existente?.comentario,
-    modificada: Boolean(existente),
   };
 
   if (existente) {
-    DB.planes[atletaId] = lista.map((s) => (s.id === sesionId ? nueva : s));
-  } else {
-    DB.planes[atletaId] = [...lista, nueva];
+    const actualizada = {
+      ...existente,
+      ...baseData,
+      modificada: true,
+    };
+    DB.planes[atletaId] = lista.map((s) => (s.id === sesionId ? actualizada : s));
+    saveDB();
+    closeModal();
+    showToast(`Se avisó a ${atleta.nombre} del cambio`);
+    renderApp();
+    return;
   }
+
+  const destVal = document.getElementById('s-dest')?.value || atletaId;
+  let targets = [];
+  if (destVal === '__TODOS__') {
+    targets = DB.atletas;
+  } else if (destVal.startsWith('__CAT__:')) {
+    const cat = destVal.replace('__CAT__:', '');
+    targets = DB.atletas.filter((a) => a.categoria === cat);
+  } else {
+    const single = Helpers.getAtleta(destVal);
+    if (single) targets = [single];
+  }
+
+  targets.forEach((a, idx) => {
+    const planActual = DB.planes[a.id] || [];
+    DB.planes[a.id] = [
+      ...planActual,
+      {
+        id: `nueva-${Date.now()}-${idx}`,
+        ...baseData,
+        estado: 'pendiente',
+        modificada: false,
+      },
+    ];
+  });
+
   saveDB();
   closeModal();
-  showToast(existente ? `Se avisó a ${atleta.nombre} del cambio` : 'Entrenamiento agregado al plan');
+  showToast(
+    targets.length > 1
+      ? `Entrenamiento cargado en el plan de ${targets.length} atletas`
+      : 'Entrenamiento agregado al plan'
+  );
+  renderApp();
+};
+
+// 1b. Modal para Duplicar Semana (+7 días) o Copiar Plan a otro atleta/grupo
+window.openDuplicarPlanModal = (atletaId) => {
+  const atleta = Helpers.getAtleta(atletaId);
+  if (!atleta) return;
+  const sesiones = Helpers.getPlan(atleta.id);
+  const otrosAtletas = DB.atletas.filter((a) => a.id !== atleta.id);
+  const categorias = Array.from(new Set(DB.atletas.map((a) => a.categoria).filter(Boolean)));
+
+  showModalHtml(`
+    <div class="flex items-start justify-between">
+      <div>
+        <h2 class="text-xl font-bold">Duplicar semana o copiar plan</h2>
+        <p class="text-sm text-muted-foreground">Agilizá la carga reutilizando las sesiones de ${esc(Helpers.nombreCompleto(atleta))} (${sesiones.length} sesiones).</p>
+      </div>
+      <button type="button" onclick="closeModal()" class="text-muted-foreground hover:text-foreground">✕</button>
+    </div>
+    <form onsubmit="saveDuplicarPlanModal(event, '${atleta.id}')" class="mt-4 space-y-4">
+      <div class="space-y-2">
+        <label class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">¿Qué querés hacer?</label>
+        <label class="flex items-start gap-2.5 rounded-lg border p-3 cursor-pointer hover:bg-muted/40">
+          <input type="radio" name="dup-modo" value="semana_siguiente" checked onchange="document.getElementById('dup-dest-box').classList.add('hidden')" class="mt-0.5 size-4" />
+          <div class="text-sm">
+            <p class="font-semibold">Repetir semana hacia la semana siguiente (+7 días)</p>
+            <p class="text-xs text-muted-foreground">Duplica los entrenamientos de ${esc(atleta.nombre)} sumando 7 días a cada fecha y dejándolos como pendientes.</p>
+          </div>
+        </label>
+        <label class="flex items-start gap-2.5 rounded-lg border p-3 cursor-pointer hover:bg-muted/40">
+          <input type="radio" name="dup-modo" value="copiar_a_otros" onchange="document.getElementById('dup-dest-box').classList.remove('hidden')" class="mt-0.5 size-4" />
+          <div class="text-sm">
+            <p class="font-semibold">Copiar este plan a otro atleta, categoría o grupo</p>
+            <p class="text-xs text-muted-foreground">Copia las sesiones de ${esc(atleta.nombre)} con sus mismas fechas a los destinatarios seleccionados.</p>
+          </div>
+        </label>
+      </div>
+
+      <div id="dup-dest-box" class="hidden space-y-1.5 rounded-lg border bg-muted/30 p-3">
+        <label class="text-xs font-semibold">Destinatario del plan copiado</label>
+        <select id="dup-dest" class="h-10 w-full rounded-lg border bg-card px-3 text-sm">
+          <option value="__CAT__:${esc(atleta.categoria)}">🏷️ Toda la categoría ${esc(atleta.categoria)}</option>
+          <option value="__TODOS__">👥 Todo el grupo (Todos los atletas)</option>
+          ${categorias
+            .filter((c) => c !== atleta.categoria)
+            .map((c) => `<option value="__CAT__:${esc(c)}">🏷️ Categoría ${esc(c)}</option>`)
+            .join('')}
+          ${otrosAtletas
+            .map((a) => `<option value="${a.id}">👤 ${esc(Helpers.nombreCompleto(a))} (${esc(a.categoria)})</option>`)
+            .join('')}
+        </select>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="closeModal()" class="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">Cancelar</button>
+        <button type="submit" class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-95">Duplicar plan</button>
+      </div>
+    </form>
+  `);
+};
+
+window.saveDuplicarPlanModal = (e, atletaId) => {
+  e.preventDefault();
+  const atleta = Helpers.getAtleta(atletaId);
+  const sesionesOrigen = Helpers.getPlan(atletaId);
+  if (sesionesOrigen.length === 0) {
+    closeModal();
+    showToast('Este atleta todavía no tiene sesiones cargadas para duplicar', 'info');
+    return;
+  }
+
+  const modo = document.querySelector('input[name="dup-modo"]:checked')?.value || 'semana_siguiente';
+
+  if (modo === 'semana_siguiente') {
+    const nuevas = sesionesOrigen.map((s, idx) => {
+      const d = new Date((s.fecha || DB.hoy) + 'T00:00:00');
+      d.setDate(d.getDate() + 7);
+      const nuevaFecha = d.toISOString().slice(0, 10);
+      return {
+        ...s,
+        id: `dup-${Date.now()}-${idx}`,
+        fecha: nuevaFecha,
+        estado: 'pendiente',
+        sensacion: undefined,
+        comentario: undefined,
+        modificada: false,
+      };
+    });
+    DB.planes[atletaId] = [...sesionesOrigen, ...nuevas];
+    saveDB();
+    closeModal();
+    showToast(`Se duplicaron ${nuevas.length} sesiones para la próxima semana (+7 días)`);
+    renderApp();
+    return;
+  }
+
+  const destVal = document.getElementById('dup-dest')?.value || '';
+  let targets = [];
+  if (destVal === '__TODOS__') {
+    targets = DB.atletas.filter((a) => a.id !== atletaId);
+  } else if (destVal.startsWith('__CAT__:')) {
+    const cat = destVal.replace('__CAT__:', '');
+    targets = DB.atletas.filter((a) => a.categoria === cat && a.id !== atletaId);
+  } else {
+    const single = Helpers.getAtleta(destVal);
+    if (single) targets = [single];
+  }
+
+  targets.forEach((destAtleta, aIdx) => {
+    const actuales = DB.planes[destAtleta.id] || [];
+    const copiadas = sesionesOrigen.map((s, sIdx) => ({
+      ...s,
+      id: `copy-${Date.now()}-${aIdx}-${sIdx}`,
+      estado: 'pendiente',
+      sensacion: undefined,
+      comentario: undefined,
+      modificada: false,
+    }));
+    DB.planes[destAtleta.id] = [...actuales, ...copiadas];
+  });
+
+  saveDB();
+  closeModal();
+  showToast(`Plan copiado a ${targets.length} atleta${targets.length === 1 ? '' : 's'}`);
   renderApp();
 };
 
@@ -3408,7 +4200,7 @@ function renderRegistroModalContent(atletaId, sesion) {
       ${
         tempRegHecho
           ? `<fieldset>
-              <legend class="mb-2 text-sm font-medium">¿Cómo te sentiste?</legend>
+              <legend class="mb-2 text-sm font-medium">¿Cómo te sentiste? (Escala de esfuerzo percibido)</legend>
               <div class="flex justify-between gap-2">
                 ${caras
                   .map((c, i) => {
@@ -3431,7 +4223,7 @@ function renderRegistroModalContent(atletaId, sesion) {
           : ''
       }
       <div class="space-y-1.5">
-        <label for="reg-com" class="text-sm font-medium">Comentario</label>
+        <label for="reg-com" class="text-sm font-medium">Comentario y sensaciones</label>
         <textarea
           id="reg-com"
           rows="3"
@@ -3466,6 +4258,17 @@ window.saveRegistroModal = (atletaId, sesionId) => {
   sesion.estado = tempRegHecho ? 'realizado' : 'no-realizado';
   sesion.sensacion = tempRegHecho ? tempRegSensacion : undefined;
   sesion.comentario = com || undefined;
+
+  // Recalcular porcentaje de adherencia del atleta automáticamente
+  const atleta = Helpers.getAtleta(atletaId);
+  if (atleta) {
+    const activas = (DB.planes[atletaId] || []).filter((s) => s.tipo !== 'Descanso');
+    if (activas.length > 0) {
+      const hechas = activas.filter((s) => s.estado === 'realizado').length;
+      atleta.adherencia = Math.round((hechas / activas.length) * 100);
+    }
+  }
+
   saveDB();
   closeModal();
   showToast(
@@ -3718,94 +4521,401 @@ window.saveNuevaCompetencia = (e) => {
   renderApp();
 };
 
-// 5. Modal de Nuevo Cobro
-window.openNuevoCobroModal = () => {
-  showModalHtml(`
+// 5. Configuración de Conceptos y Valores de Cobro (Cuota, Indumentaria, Viajes y Competencias, y nuevos conceptos)
+window.openConceptosCobroModal = () => {
+  const lista = getConceptosCobroList();
+  showModalHtml(
+    `
     <div class="flex items-start justify-between">
       <div>
-        <h2 class="text-xl font-bold">Nuevo cobro</h2>
-        <p class="text-sm text-muted-foreground">Registrá una cuota, inscripción, indumentaria o viaje.</p>
+        <h2 class="text-xl font-bold">Conceptos y Valores de Cobro</h2>
+        <p class="text-sm text-muted-foreground">Configurá los valores base de Cuota, Indumentaria, Viajes y Competencias, o creá nuevos conceptos.</p>
       </div>
       <button type="button" onclick="closeModal()" class="text-muted-foreground hover:text-foreground">✕</button>
     </div>
-    <form onsubmit="saveNuevoCobro(event)" class="mt-4 grid gap-3">
+
+    <div class="mt-4 space-y-5">
+      <form onsubmit="guardarValoresConceptos(event)" class="space-y-3">
+        <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Conceptos activos (editá los montos y guardá)</p>
+        <div class="space-y-2.5">
+          ${lista
+            .map(
+              (c, idx) => `
+            <div class="grid items-center gap-2 rounded-xl border bg-muted/25 p-3 sm:grid-cols-[1fr_8.5rem_1fr_auto]">
+              <div>
+                <label class="text-[11px] font-medium text-muted-foreground">Concepto</label>
+                <input
+                  id="cc-nombre-${idx}"
+                  required
+                  value="${esc(c.nombre)}"
+                  class="mt-0.5 h-9 w-full rounded-lg border bg-card px-2.5 text-sm font-semibold"
+                />
+              </div>
+              <div>
+                <label class="text-[11px] font-medium text-muted-foreground">Valor base ($)</label>
+                <input
+                  id="cc-monto-${idx}"
+                  type="number"
+                  min="0"
+                  required
+                  value="${Number(c.montoSugerido) || 0}"
+                  class="mt-0.5 h-9 w-full rounded-lg border bg-card px-2.5 text-sm font-mono font-semibold"
+                />
+              </div>
+              <div>
+                <label class="text-[11px] font-medium text-muted-foreground">Detalle por defecto</label>
+                <input
+                  id="cc-detalle-${idx}"
+                  value="${esc(c.detalleSugerido || '')}"
+                  placeholder="Ej.: Cuota mensual"
+                  class="mt-0.5 h-9 w-full rounded-lg border bg-card px-2.5 text-xs"
+                />
+              </div>
+              <div class="pt-4 text-right">
+                ${
+                  lista.length > 1
+                    ? `<button type="button" onclick="eliminarConceptoCobro('${c.id}')" class="rounded px-2 py-1 text-xs text-destructive hover:bg-destructive/10" title="Eliminar concepto">✕</button>`
+                    : ''
+                }
+              </div>
+            </div>
+          `
+            )
+            .join('')}
+        </div>
+        <div class="flex justify-end">
+          <button type="submit" class="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-95">
+            Guardar cambios en valores
+          </button>
+        </div>
+      </form>
+
+      <form onsubmit="agregarNuevoConceptoCobro(event)" class="rounded-xl border bg-card p-4 space-y-3">
+        <p class="text-sm font-bold">+ Crear nuevo concepto de cobro</p>
+        <div class="grid gap-2.5 sm:grid-cols-3">
+          <div>
+            <label class="text-xs font-medium">Nombre del concepto *</label>
+            <input id="nuevo-cc-nombre" required placeholder="Ej.: Seguro Deportivo / Torneo" class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-sm" />
+          </div>
+          <div>
+            <label class="text-xs font-medium">Valor sugerido (ARS) *</label>
+            <input id="nuevo-cc-monto" type="number" min="0" required placeholder="10000" class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-sm font-mono" />
+          </div>
+          <div>
+            <label class="text-xs font-medium">Detalle sugerido</label>
+            <input id="nuevo-cc-detalle" placeholder="Ej.: Cobertura anual" class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-sm" />
+          </div>
+        </div>
+        <div class="flex justify-end">
+          <button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-secondary px-3.5 py-2 text-xs font-semibold text-secondary-foreground hover:opacity-90">
+            <i data-lucide="plus" class="size-3.5"></i> Agregar concepto al sistema
+          </button>
+        </div>
+      </form>
+    </div>
+  `,
+    'max-w-2xl'
+  );
+};
+
+window.guardarValoresConceptos = (e) => {
+  e.preventDefault();
+  const lista = getConceptosCobroList();
+  lista.forEach((c, idx) => {
+    const nomEl = document.getElementById(`cc-nombre-${idx}`);
+    const monEl = document.getElementById(`cc-monto-${idx}`);
+    const detEl = document.getElementById(`cc-detalle-${idx}`);
+    if (nomEl && nomEl.value.trim()) c.nombre = nomEl.value.trim();
+    if (monEl) c.montoSugerido = Number(monEl.value) || 0;
+    if (detEl) c.detalleSugerido = detEl.value.trim();
+  });
+  saveDB();
+  closeModal();
+  showToast('Valores y conceptos de cobro actualizados');
+  renderApp();
+};
+
+window.agregarNuevoConceptoCobro = (e) => {
+  e.preventDefault();
+  const nombre = document.getElementById('nuevo-cc-nombre').value.trim();
+  const monto = Number(document.getElementById('nuevo-cc-monto').value) || 0;
+  const detalle = document.getElementById('nuevo-cc-detalle').value.trim() || nombre;
+  if (!nombre) return;
+  const lista = getConceptosCobroList();
+  lista.push({
+    id: `cc-${Date.now()}`,
+    nombre,
+    montoSugerido: monto,
+    detalleSugerido: detalle,
+  });
+  saveDB();
+  showToast(`Concepto "${nombre}" creado`);
+  openConceptosCobroModal();
+  renderApp();
+};
+
+window.eliminarConceptoCobro = (id) => {
+  const lista = getConceptosCobroList();
+  if (lista.length <= 1) return;
+  DB.conceptosCobro = lista.filter((c) => c.id !== id);
+  saveDB();
+  showToast('Concepto eliminado');
+  openConceptosCobroModal();
+  renderApp();
+};
+
+// Modal de Nuevo / Editar Cobro (individual o masivo a toda la escuela / categoría)
+window.openNuevoCobroModal = (preselectedAtletaId = null, editPagoId = null, preselectedConcepto = null) => {
+  const catalogo = getConceptosCobroList();
+  const existing = editPagoId ? DB.pagos.find((p) => p.id === editPagoId) : null;
+
+  const conceptoInicial =
+    existing?.concepto ||
+    preselectedConcepto ||
+    catalogo[0]?.nombre ||
+    'Cuota';
+  const objConcepto = catalogo.find((c) => c.nombre === conceptoInicial) || catalogo[0] || { montoSugerido: 15000, detalleSugerido: 'Cuota mensual' };
+  const montoInicial = existing ? existing.monto : objConcepto.montoSugerido;
+  const detalleInicial = existing ? existing.detalle : objConcepto.detalleSugerido || conceptoInicial;
+  const vencInicial = existing ? existing.vencimiento : DB.hoy;
+  const estadoInicial = existing ? existing.estado : 'pendiente';
+  const targetAtletaId = existing ? existing.atletaId : preselectedAtletaId || (DB.atletas[0]?.id || '');
+
+  const categoriasDisponibles = Array.from(new Set(DB.atletas.map((a) => a.categoria).filter(Boolean)));
+
+  showModalHtml(`
+    <div class="flex items-start justify-between">
       <div>
-        <label class="text-xs font-medium">Atleta</label>
-        <select id="np-atleta" class="h-10 w-full rounded-lg border bg-card px-3 text-sm">
-          ${DB.atletas.map((a) => `<option value="${a.id}">${esc(a.apellido)}, ${esc(a.nombre)}</option>`).join('')}
+        <h2 class="text-xl font-bold">${existing ? 'Editar cobro' : 'Cargar cobro a atletas'}</h2>
+        <p class="text-sm text-muted-foreground">${
+          existing
+            ? 'Modificá el valor, concepto, detalle, vencimiento o estado del cobro.'
+            : 'Cargá un cobro a un atleta individual, a una categoría o a toda la escuela.'
+        }</p>
+      </div>
+      <button type="button" onclick="closeModal()" class="text-muted-foreground hover:text-foreground">✕</button>
+    </div>
+    <form onsubmit="saveNuevoCobro(event, '${editPagoId || ''}')" class="mt-4 grid gap-3.5">
+      <div>
+        <label class="text-xs font-medium">${existing ? 'Atleta' : 'Destinatario del cobro'}</label>
+        <select id="np-atleta" class="mt-1 h-10 w-full rounded-lg border bg-card px-3 text-sm font-medium">
+          ${
+            !existing
+              ? `<option value="__TODOS__" ${!preselectedAtletaId ? '' : ''}>👥 Todos los atletas de la escuela (${DB.atletas.length} atletas)</option>
+                 ${categoriasDisponibles
+                   .map((cat) => `<option value="__CAT__:${esc(cat)}">🏷️ Todos los de categoría ${esc(cat)}</option>`)
+                   .join('')}`
+              : ''
+          }
+          ${DB.atletas
+            .map(
+              (a) =>
+                `<option value="${a.id}" ${targetAtletaId === a.id ? 'selected' : ''}>${esc(a.apellido)}, ${esc(a.nombre)} (${esc(a.categoria)})</option>`
+            )
+            .join('')}
         </select>
       </div>
+
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="text-xs font-medium">Concepto</label>
-          <select id="np-concepto" class="h-10 w-full rounded-lg border bg-card px-3 text-sm">
-            <option>Cuota</option>
-            <option>Indumentaria</option>
-            <option>Inscripción</option>
-            <option>Viaje</option>
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-medium">Concepto</label>
+            <button type="button" onclick="openConceptosCobroModal()" class="text-[11px] font-semibold text-primary hover:underline">
+              + Gestionar conceptos
+            </button>
+          </div>
+          <select id="np-concepto" onchange="onConceptoCobroChange(this.value)" class="mt-1 h-10 w-full rounded-lg border bg-card px-3 text-sm">
+            ${catalogo
+              .map(
+                (c) =>
+                  `<option value="${esc(c.nombre)}" ${conceptoInicial === c.nombre ? 'selected' : ''}>${esc(c.nombre)} (${Helpers.pesos(c.montoSugerido)})</option>`
+              )
+              .join('')}
+            ${
+              existing && !catalogo.some((c) => c.nombre === existing.concepto)
+                ? `<option value="${esc(existing.concepto)}" selected>${esc(existing.concepto)}</option>`
+                : ''
+            }
+            <option value="__NUEVO__">+ Crear nuevo concepto…</option>
           </select>
         </div>
         <div>
-          <label class="text-xs font-medium">Monto (ARS)</label>
-          <input id="np-monto" type="number" required value="15000" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
+          <label class="text-xs font-medium">Valor a cobrar (ARS) *</label>
+          <input id="np-monto" type="number" min="0" required value="${montoInicial}" class="mt-1 h-10 w-full rounded-lg border bg-card px-3 text-sm font-mono font-bold" />
         </div>
       </div>
+
+      <div id="np-nuevo-concepto-wrap" class="hidden rounded-lg border border-primary/30 bg-muted/40 p-3">
+        <label class="text-xs font-semibold text-primary">Nombre del nuevo concepto *</label>
+        <input id="np-nuevo-concepto-nombre" placeholder="Ej.: Viaje Provincial / Seguro / Bono" class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-sm" />
+        <label class="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+          <input type="checkbox" id="np-guardar-concepto" checked class="accent-primary" />
+          Guardar este concepto y su valor para futuros cobros
+        </label>
+      </div>
+
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="text-xs font-medium">Detalle</label>
-          <input id="np-detalle" required placeholder="Ej.: Cuota mensual" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
+          <label class="text-xs font-medium">Detalle / Descripción *</label>
+          <input id="np-detalle" required value="${esc(detalleInicial)}" placeholder="Ej.: Cuota mensual / Viaje a torneo" class="mt-1 h-10 w-full rounded-lg border bg-card px-3 text-sm" />
         </div>
         <div>
-          <label class="text-xs font-medium">Vencimiento</label>
-          <input id="np-venc" type="date" required value="${DB.hoy}" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
+          <label class="text-xs font-medium">Fecha de vencimiento *</label>
+          <input id="np-venc" type="date" required value="${esc(vencInicial)}" class="mt-1 h-10 w-full rounded-lg border bg-card px-3 text-sm" />
         </div>
       </div>
+
+      ${
+        existing
+          ? `<div>
+              <label class="text-xs font-medium">Estado del pago</label>
+              <select id="np-estado" class="mt-1 h-10 w-full rounded-lg border bg-card px-3 text-sm">
+                <option value="pendiente" ${estadoInicial === 'pendiente' ? 'selected' : ''}>Pendiente</option>
+                <option value="vencido" ${estadoInicial === 'vencido' ? 'selected' : ''}>Vencido</option>
+                <option value="pagado" ${estadoInicial === 'pagado' ? 'selected' : ''}>Pagado</option>
+              </select>
+            </div>`
+          : ''
+      }
+
       <div class="mt-2 flex justify-end gap-2">
         <button type="button" onclick="closeModal()" class="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">Cancelar</button>
-        <button type="submit" class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-95">Agregar cobro</button>
+        <button type="submit" class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-95">
+          ${existing ? 'Guardar cambios' : 'Cargar cobro'}
+        </button>
       </div>
     </form>
   `);
 };
 
-window.saveNuevoCobro = (e) => {
+window.onConceptoCobroChange = (val) => {
+  const wrap = document.getElementById('np-nuevo-concepto-wrap');
+  const nuevoInput = document.getElementById('np-nuevo-concepto-nombre');
+  if (val === '__NUEVO__') {
+    if (wrap) wrap.classList.remove('hidden');
+    if (nuevoInput) nuevoInput.required = true;
+    return;
+  }
+  if (wrap) wrap.classList.add('hidden');
+  if (nuevoInput) nuevoInput.required = false;
+
+  const catalogo = getConceptosCobroList();
+  const found = catalogo.find((c) => c.nombre === val);
+  if (found) {
+    const montoEl = document.getElementById('np-monto');
+    const detEl = document.getElementById('np-detalle');
+    if (montoEl) montoEl.value = Number(found.montoSugerido) || 0;
+    if (detEl) detEl.value = found.detalleSugerido || found.nombre;
+  }
+};
+
+window.saveNuevoCobro = (e, editPagoId = '') => {
   e.preventDefault();
-  DB.pagos.push({
-    id: `p-${Date.now()}`,
-    atletaId: document.getElementById('np-atleta').value,
-    concepto: document.getElementById('np-concepto').value,
-    monto: Number(document.getElementById('np-monto').value),
-    detalle: document.getElementById('np-detalle').value.trim(),
-    vencimiento: document.getElementById('np-venc').value,
-    estado: 'pendiente',
+  const destVal = document.getElementById('np-atleta').value;
+  let concepto = document.getElementById('np-concepto').value;
+  const monto = Number(document.getElementById('np-monto').value) || 0;
+  const detalle = document.getElementById('np-detalle').value.trim();
+  const vencimiento = document.getElementById('np-venc').value;
+
+  if (concepto === '__NUEVO__') {
+    const nuevoNombre = document.getElementById('np-nuevo-concepto-nombre').value.trim();
+    if (!nuevoNombre) return;
+    concepto = nuevoNombre;
+    const guardarCat = document.getElementById('np-guardar-concepto')?.checked;
+    if (guardarCat) {
+      const catalogo = getConceptosCobroList();
+      if (!catalogo.some((c) => c.nombre.toLowerCase() === concepto.toLowerCase())) {
+        catalogo.push({
+          id: `cc-${Date.now()}`,
+          nombre: concepto,
+          montoSugerido: monto,
+          detalleSugerido: detalle || concepto,
+        });
+      }
+    }
+  }
+
+  if (editPagoId) {
+    const existing = DB.pagos.find((p) => p.id === editPagoId);
+    if (existing) {
+      existing.atletaId = destVal;
+      existing.concepto = concepto;
+      existing.monto = monto;
+      existing.detalle = detalle;
+      existing.vencimiento = vencimiento;
+      const estEl = document.getElementById('np-estado');
+      if (estEl) {
+        existing.estado = estEl.value;
+        if (existing.estado === 'pagado' && !existing.fechaPago) {
+          existing.fechaPago = DB.hoy;
+        }
+      }
+    }
+    saveDB();
+    closeModal();
+    showToast('Cobro actualizado correctamente');
+    renderApp();
+    return;
+  }
+
+  let targets = [];
+  if (destVal === '__TODOS__') {
+    targets = DB.atletas;
+  } else if (destVal.startsWith('__CAT__:')) {
+    const cat = destVal.replace('__CAT__:', '');
+    targets = DB.atletas.filter((a) => a.categoria === cat);
+  } else {
+    const single = Helpers.getAtleta(destVal);
+    if (single) targets = [single];
+  }
+
+  targets.forEach((a, idx) => {
+    DB.pagos.push({
+      id: `p-${Date.now()}-${idx}`,
+      atletaId: a.id,
+      concepto,
+      monto,
+      detalle,
+      vencimiento,
+      estado: 'pendiente',
+    });
   });
+
   saveDB();
   closeModal();
-  showToast('Cobro registrado correctamente');
+  showToast(
+    targets.length > 1
+      ? `Se cargó "${concepto}" (${Helpers.pesos(monto)}) a ${targets.length} atletas`
+      : 'Cobro registrado correctamente'
+  );
   renderApp();
 };
 
 // 6. Modal de Nuevo Resultado / Marca Personal
-window.openNuevoResultadoModal = (atletaId) => {
+window.openNuevoResultadoModal = (atletaId, defaultCompetencia = '', defaultFecha = '') => {
   const atleta = Helpers.getAtleta(atletaId);
+  if (!atleta) return;
+  const distanciasDisponibles = Array.from(
+    new Set(['80 m', '150 m', '400 m', ...(DB.distanciasRanking || ['800 m', '1500 m', '3000 m', '5K', '10K', '21K'])])
+  );
   showModalHtml(`
     <div class="flex items-start justify-between">
       <div>
         <h2 class="text-xl font-bold">Cargar resultado · ${esc(atleta.nombre)}</h2>
-        <p class="text-sm text-muted-foreground">Actualiza su historial, sus marcas personales y el ranking público.</p>
+        <p class="text-sm text-muted-foreground">Actualiza automáticamente su historial, marcas personales (PB), gráfico de evolución y ranking público.</p>
       </div>
       <button type="button" onclick="closeModal()" class="text-muted-foreground hover:text-foreground">✕</button>
     </div>
     <form onsubmit="saveNuevoResultado(event, '${atletaId}')" class="mt-4 grid gap-3">
       <div>
         <label class="text-xs font-medium">Competencia</label>
-        <input id="nr-comp" required placeholder="Ej.: Torneo Provincial Valcheta" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
+        <input id="nr-comp" required value="${esc(defaultCompetencia)}" placeholder="Ej.: Torneo Provincial Valcheta" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
       </div>
       <div class="grid grid-cols-3 gap-3">
         <div>
           <label class="text-xs font-medium">Prueba / Distancia</label>
           <select id="nr-dist" class="h-10 w-full rounded-lg border bg-card px-2 text-sm">
-            ${DB.distanciasRanking.map((d) => `<option value="${d}">${d}</option>`).join('')}
+            ${distanciasDisponibles.map((d) => `<option value="${d}" ${d === '1500 m' ? 'selected' : ''}>${d}</option>`).join('')}
           </select>
         </div>
         <div>
@@ -3814,7 +4924,7 @@ window.openNuevoResultadoModal = (atletaId) => {
         </div>
         <div>
           <label class="text-xs font-medium">Fecha</label>
-          <input id="nr-fecha" type="date" required value="${DB.hoy}" class="h-10 w-full rounded-lg border bg-card px-2 text-sm" />
+          <input id="nr-fecha" type="date" required value="${esc(defaultFecha || DB.hoy)}" class="h-10 w-full rounded-lg border bg-card px-2 text-sm" />
         </div>
       </div>
       <div class="grid grid-cols-2 gap-3">
@@ -3867,9 +4977,26 @@ window.saveNuevoResultado = (e, atletaId) => {
     marcaExistente.competencia = competencia;
   }
 
+  // Alimentar automáticamente el gráfico de evolución (ritmo en min/km)
+  const segs = Helpers.aSegundos(tiempo);
+  let distKm = 0;
+  if (distancia.toUpperCase().endsWith('K')) {
+    distKm = parseFloat(distancia);
+  } else if (distancia.toLowerCase().includes('m')) {
+    distKm = parseFloat(distancia) / 1000;
+  }
+  if (segs > 0 && distKm > 0) {
+    const ritmoMinKm = Number((segs / 60 / distKm).toFixed(2));
+    if (ritmoMinKm > 1.5 && ritmoMinKm < 15) {
+      atleta.evolucion = atleta.evolucion || [];
+      atleta.evolucion.push({ fecha, ritmo: ritmoMinKm });
+      atleta.evolucion.sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
+    }
+  }
+
   saveDB();
   closeModal();
-  showToast('Resultado y marca actualizados');
+  showToast('Resultado, marca personal y evolución actualizados');
   renderApp();
 };
 

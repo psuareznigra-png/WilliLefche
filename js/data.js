@@ -37,6 +37,12 @@ function getCurrentWeekISO(baseIso) {
 
 const HOY_DEFAULT = getTodayISO();
 
+const DEFAULT_CONCEPTOS_COBRO = [
+  { id: 'cuota', nombre: 'Cuota', montoSugerido: 15000, detalleSugerido: 'Cuota mensual' },
+  { id: 'indumentaria', nombre: 'Indumentaria', montoSugerido: 25000, detalleSugerido: 'Indumentaria del equipo' },
+  { id: 'viajes-competencias', nombre: 'Viajes y Competencias', montoSugerido: 20000, detalleSugerido: 'Viaje y participación en competencia' },
+];
+
 const INITIAL_DB = {
   appKey: 'WLF-VALCHETA-2026',
   version: 'real-1.0',
@@ -57,6 +63,7 @@ const INITIAL_DB = {
   },
   semanaActual: getCurrentWeekISO(HOY_DEFAULT),
   distanciasRanking: ['80 m', '150 m', '300 m', '600 m', '800 m', '1500 m', '3000 m', '5K', '10K', '21K'],
+  conceptosCobro: DEFAULT_CONCEPTOS_COBRO,
   atletas: [
     {
       id: 'alejo-rivas-abrate',
@@ -655,6 +662,9 @@ function loadDB() {
           coachUser: parsed.equipo?.coachUser || 'cristian.torres',
           coachPass: parsed.equipo?.coachPass || '27884821',
         };
+        if (!Array.isArray(parsed.conceptosCobro) || parsed.conceptosCobro.length === 0) {
+          parsed.conceptosCobro = JSON.parse(JSON.stringify(DEFAULT_CONCEPTOS_COBRO));
+        }
         parsed.hoy = getTodayISO();
         parsed.semanaActual = getCurrentWeekISO(parsed.hoy);
         return parsed;
@@ -751,6 +761,9 @@ const CloudSync = {
               return;
             }
             if (cloudData && Array.isArray(cloudData.atletas)) {
+              if (!Array.isArray(cloudData.conceptosCobro) || cloudData.conceptosCobro.length === 0) {
+                cloudData.conceptosCobro = JSON.parse(JSON.stringify(DEFAULT_CONCEPTOS_COBRO));
+              }
               window.DB = cloudData;
               window.DB.hoy = getTodayISO();
               window.DB.semanaActual = getCurrentWeekISO(window.DB.hoy);
