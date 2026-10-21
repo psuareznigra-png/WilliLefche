@@ -107,14 +107,21 @@ const Auth = {
       const aDni = cleanDniStr(a.dni);
       const aPass = String(a.password || aDni);
       const aPassClean = cleanDniStr(aPass);
+      const altUsers = Array.isArray(a.altUsuarios) ? a.altUsuarios.map(normalizeUserStr) : [];
+      const altPasses = Array.isArray(a.altPasswords) ? a.altPasswords.map(cleanDniStr) : [];
 
-      // Coincidencia de Atleta (por nombre.apellido o por DNI)
+      // Coincidencia de Atleta (por nombre.apellido, variante o por DNI)
       const userMatchesAthlete =
         u === aUser ||
+        altUsers.includes(u) ||
         (aDni && uDni === aDni) ||
+        (uDni && altPasses.includes(uDni)) ||
         (a.email && u === normalizeUserStr(a.email));
 
-      const passMatchesAthlete = rawPass === aPass || (pDni && pDni === aPassClean);
+      const passMatchesAthlete =
+        rawPass === aPass ||
+        (pDni && pDni === aPassClean) ||
+        (pDni && altPasses.includes(pDni));
 
       if (userMatchesAthlete && passMatchesAthlete) {
         const session = {
@@ -134,10 +141,16 @@ const Auth = {
         const tUser = normalizeUserStr(a.tutor.usuario);
         const tPass = String(a.tutor.password || aPass);
         const tPassClean = cleanDniStr(tPass);
+        const altTutorUsers = Array.isArray(a.tutor.altUsuarios) ? a.tutor.altUsuarios.map(normalizeUserStr) : [];
 
         const userMatchesTutor =
-          u === tUser || (a.tutor.email && u === normalizeUserStr(a.tutor.email));
-        const passMatchesTutor = rawPass === tPass || (pDni && pDni === tPassClean);
+          u === tUser ||
+          altTutorUsers.includes(u) ||
+          (a.tutor.email && u === normalizeUserStr(a.tutor.email));
+        const passMatchesTutor =
+          rawPass === tPass ||
+          (pDni && pDni === tPassClean) ||
+          (pDni && altPasses.includes(pDni));
 
         if (userMatchesTutor && passMatchesTutor) {
           const session = {

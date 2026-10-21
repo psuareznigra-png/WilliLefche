@@ -8,6 +8,7 @@ const State = {
   rankingGenero: 'todos',
   atletasQuery: '',
   atletasCat: 'Todas',
+  atletasDisciplina: 'Todas',
   fichaTab: 'plan',
   planFiltro: 'todas',
   pagosEstado: 'Todos',
@@ -234,6 +235,7 @@ function renderSessionCard(sesion, actionHtml = '') {
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-2">
           <span class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">${esc(sesion.tipo)}</span>
+          ${sesion.disciplina ? `<span class="inline-flex items-center rounded-md bg-primary/10 px-1.5 py-0.5 text-xs font-semibold text-primary">🏃 ${esc(sesion.disciplina)}</span>` : ''}
           ${sesion.intensidad ? renderIntensidadChip(sesion.intensidad) : ''}
           ${
             sesion.modificada
@@ -272,13 +274,34 @@ function renderSessionCard(sesion, actionHtml = '') {
           }
         </dl>
         ${
-          sesion.comentario || sesion.sensacion
-            ? `<div class="mt-3 flex gap-2 rounded-lg bg-muted px-3 py-2 text-sm">
-                <i data-lucide="message-square" class="mt-0.5 size-4 shrink-0 text-muted-foreground"></i>
-                <p>
-                  ${sesion.sensacion ? `<span class="mr-2 font-semibold">Sensación ${sesion.sensacion}/5</span>` : ''}
-                  ${sesion.comentario ? `<span class="text-muted-foreground">“${esc(sesion.comentario)}”</span>` : ''}
-                </p>
+          sesion.resultadoReal || sesion.distanciaRealKm || sesion.tiempoRealMin || sesion.comentario || sesion.sensacion
+            ? `<div class="mt-3 space-y-1.5 rounded-xl border border-primary/25 bg-primary/5 px-3.5 py-2.5 text-sm">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <span class="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-primary">
+                    <i data-lucide="clipboard-check" class="size-3.5"></i> Informe de la sesión
+                  </span>
+                  ${
+                    sesion.sensacion
+                      ? `<span class="inline-flex items-center gap-1 rounded-full bg-card px-2.5 py-0.5 text-xs font-bold shadow-2xs">
+                          Esfuerzo: ${sesion.sensacion}/5 ${['', '😣', '😕', '😐', '🙂', '💪'][sesion.sensacion] || ''}
+                        </span>`
+                      : ''
+                  }
+                </div>
+                ${
+                  sesion.resultadoReal || sesion.distanciaRealKm || sesion.tiempoRealMin
+                    ? `<p class="font-semibold text-foreground">
+                        📊 Resultado: ${esc(sesion.resultadoReal || 'Completado')}
+                        ${sesion.distanciaRealKm ? ` · <span class="tabular-nums">${esc(sesion.distanciaRealKm)} km reales</span>` : ''}
+                        ${sesion.tiempoRealMin ? ` · <span class="tabular-nums">${esc(sesion.tiempoRealMin)} min</span>` : ''}
+                      </p>`
+                    : ''
+                }
+                ${
+                  sesion.comentario
+                    ? `<p class="text-muted-foreground">💬 “${esc(sesion.comentario)}”</p>`
+                    : ''
+                }
               </div>`
             : ''
         }
@@ -547,11 +570,37 @@ function viewHome() {
 }
 
 function viewRankings() {
+  if (!State.rankingCategoria) State.rankingCategoria = 'todas';
+  const bloquesRank = [
+    { id: 'todas', label: 'Todas las pruebas' },
+    { id: 'running', label: '🏃 Running (Calle y Ruta)' },
+    { id: 'pista', label: '⏱️ Pista (Velocidad y Fondo)' },
+    { id: 'campo', label: '🥇 Campo (Lanzamientos y Saltos)' },
+  ];
+
   const generos = [
     { v: 'todos', l: 'Todos' },
     { v: 'F', l: 'Mujeres' },
     { v: 'M', l: 'Varones' },
   ];
+
+  const distanciasFiltradas = (DB.distanciasRanking || []).filter((d) => {
+    if (State.rankingCategoria === 'running') {
+      return ['5K', '10K', '15K', '21K', '42K'].includes(d);
+    }
+    if (State.rankingCategoria === 'campo') {
+      return Helpers.esPruebaDeCampo(d);
+    }
+    if (State.rankingCategoria === 'pista') {
+      return !['5K', '10K', '15K', '21K', '42K'].includes(d) && !Helpers.esPruebaDeCampo(d);
+    }
+    return true;
+  });
+
+  if (distanciasFiltradas.length > 0 && !distanciasFiltradas.includes(State.rankingDistancia)) {
+    State.rankingDistancia = distanciasFiltradas[0];
+  }
+
   const filas = Helpers.rankingPublico(State.rankingDistancia).filter(
     (r) => State.rankingGenero === 'todos' || r.genero === State.rankingGenero
   );
@@ -562,16 +611,36 @@ function viewRankings() {
       <main class="mx-auto w-full max-w-content flex-1 px-4 py-12 sm:px-6">
         <h1 class="font-display text-5xl font-extrabold uppercase">Rankings y marcas</h1>
         <p class="mt-2 max-w-2xl text-muted-foreground">
-          Mejores marcas personales del equipo en competencias oficiales.
+          Mejores marcas personales del equipo en competencias oficiales (Running, Pista y Campo).
         </p>
         <p class="mt-4 inline-flex items-center gap-2 rounded-lg bg-success-soft px-3 py-2 text-sm text-success">
           <i data-lucide="shield-check" class="size-4"></i>
           Solo se publican nombre, categoría, edad y rendimiento.
         </p>
 
-        <div class="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div class="mt-6 flex flex-wrap gap-1.5 border-b pb-4">
+          ${bloquesRank
+            .map(
+              (b) => `
+            <button
+              type="button"
+              onclick="State.rankingCategoria = '${b.id}'; renderApp()"
+              class="rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${
+                State.rankingCategoria === b.id
+                  ? 'bg-primary text-primary-foreground shadow-2xs'
+                  : 'bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground'
+              }"
+            >
+              ${b.label}
+            </button>
+          `
+            )
+            .join('')}
+        </div>
+
+        <div class="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div role="tablist" aria-label="Distancia" class="flex flex-wrap gap-2">
-            ${DB.distanciasRanking
+            ${distanciasFiltradas
               .map(
                 (d) => `
               <button
@@ -948,9 +1017,9 @@ function viewCoachDashboard() {
   const proxima = DB.competencias[0];
 
   const feed = sesiones
-    .filter((s) => s.comentario)
-    .sort((a, b) => b.fecha.localeCompare(a.fecha))
-    .slice(0, 6);
+    .filter((s) => s.comentario || s.resultadoReal || s.sensacion)
+    .sort((a, b) => (b.fechaInforme || b.fecha || '').localeCompare(a.fechaInforme || a.fecha || ''))
+    .slice(0, 8);
 
   const alertas = [
     ...sesiones
@@ -1015,6 +1084,9 @@ function viewCoachDashboard() {
         <a href="#/entrenador/avisos" class="inline-flex items-center gap-2 rounded-lg border bg-card px-4 py-2 text-sm font-medium hover:bg-muted">
           <i data-lucide="message-square" class="size-4"></i> Enviar aviso
         </a>
+        <button type="button" onclick="openImportarPlanExcelModal()" class="inline-flex items-center gap-2 rounded-lg border border-primary/40 bg-card px-3.5 py-2 text-sm font-semibold text-primary hover:bg-muted">
+          <i data-lucide="file-spreadsheet" class="size-4"></i> Importar plan Excel
+        </button>
         <a href="#/entrenador/atletas" class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-95">
           <i data-lucide="plus" class="size-4"></i> Cargar plan
         </a>
@@ -1042,13 +1114,13 @@ function viewCoachDashboard() {
       <div class="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
         <section class="rounded-xl border bg-card">
           <div class="flex items-center justify-between border-b px-5 py-4">
-            <h2 class="text-2xl font-bold">Sensaciones recientes</h2>
-            <span class="text-sm text-muted-foreground">Comentarios de los atletas</span>
+            <h2 class="text-2xl font-bold">Resultados y sensaciones recientes</h2>
+            <span class="text-sm text-muted-foreground">Informes de entrenamiento de los atletas</span>
           </div>
           <ul class="divide-y">
             ${
               feed.length === 0
-                ? `<li class="px-5 py-8 text-center text-sm text-muted-foreground">Todavía no hay comentarios registrados en las sesiones.</li>`
+                ? `<li class="px-5 py-8 text-center text-sm text-muted-foreground">Todavía no hay resultados ni comentarios registrados en las sesiones.</li>`
                 : feed
                     .map((s) => {
                       const a = Helpers.getAtleta(s.atletaId);
@@ -1063,7 +1135,16 @@ function viewCoachDashboard() {
                                 <span class="font-semibold">${esc(a.nombre)} ${esc(a.apellido)}</span>
                                 <span class="text-muted-foreground"> · ${esc(s.titulo)} · ${d.dia} ${d.num}</span>
                               </p>
-                              <p class="mt-1 text-sm text-muted-foreground">“${esc(s.comentario)}”</p>
+                              ${
+                                s.resultadoReal || s.distanciaRealKm || s.tiempoRealMin
+                                  ? `<p class="mt-1 text-xs font-semibold text-primary">
+                                      📊 ${esc(s.resultadoReal || 'Entrenamiento completado')}
+                                      ${s.distanciaRealKm ? ` (${esc(s.distanciaRealKm)} km)` : ''}
+                                      ${s.tiempoRealMin ? ` · ${esc(s.tiempoRealMin)} min` : ''}
+                                    </p>`
+                                  : ''
+                              }
+                              ${s.comentario ? `<p class="mt-0.5 text-sm text-muted-foreground">“${esc(s.comentario)}”</p>` : ''}
                             </div>
                             ${
                               s.sensacion
@@ -1140,13 +1221,21 @@ function viewCoachDashboard() {
 }
 
 function viewCoachAtletas() {
-  const categorias = ['Todas', 'U14', 'U16', 'U18', 'U20', 'Mayores'];
+  const categorias = ['Todas', 'Infantiles', 'U12', 'U14', 'U16', 'U18', 'U20', 'Mayores'];
+  const disciplinasCatalogo = Array.isArray(DB.disciplinasDisponibles) && DB.disciplinasDisponibles.length > 0
+    ? DB.disciplinasDisponibles
+    : ['Running', 'Velocidad', 'Medio Fondo', 'Fondo', 'Cross / Trail', 'Saltos', 'Lanzamientos', 'Marcha', 'Iniciación Atlética'];
   const q = State.atletasQuery.trim().toLowerCase();
-  const filtrados = DB.atletas.filter(
-    (a) =>
-      (State.atletasCat === 'Todas' || a.categoria === State.atletasCat) &&
-      `${a.nombre} ${a.apellido} ${a.dni || ''} ${a.usuario || ''}`.toLowerCase().includes(q)
-  );
+  const filtrados = DB.atletas.filter((a) => {
+    const matchCat = State.atletasCat === 'Todas' || a.categoria === State.atletasCat;
+    const discList = Array.isArray(a.disciplinas) ? a.disciplinas : [];
+    const matchDisc =
+      State.atletasDisciplina === 'Todas' ||
+      discList.some((d) => d.toLowerCase() === State.atletasDisciplina.toLowerCase()) ||
+      String(a.pruebas || '').toLowerCase().includes(State.atletasDisciplina.toLowerCase());
+    const matchQuery = `${a.nombre} ${a.apellido} ${a.dni || ''} ${a.usuario || ''} ${discList.join(' ')}`.toLowerCase().includes(q);
+    return matchCat && matchDisc && matchQuery;
+  });
 
   const content = `
     ${renderPageHeader(
@@ -1154,7 +1243,13 @@ function viewCoachAtletas() {
       `${DB.atletas.length} atletas registrados en la Escuela Municipal Willilefche`,
       `
         <button type="button" onclick="openNominaCredencialesModal()" class="inline-flex items-center gap-2 rounded-lg border bg-card px-3.5 py-2 text-sm font-medium hover:bg-muted">
-          <i data-lucide="key-round" class="size-4 text-primary"></i> Ver tabla de usuarios y claves
+          <i data-lucide="key-round" class="size-4 text-primary"></i> Usuarios y claves
+        </button>
+        <button type="button" onclick="openAsignarDisciplinasLoteModal()" class="inline-flex items-center gap-2 rounded-lg border bg-card px-3.5 py-2 text-sm font-medium hover:bg-muted">
+          <i data-lucide="medal" class="size-4 text-primary"></i> Asignar disciplinas
+        </button>
+        <button type="button" onclick="openImportarPlanExcelModal()" class="inline-flex items-center gap-2 rounded-lg border border-primary/40 bg-card px-3.5 py-2 text-sm font-semibold text-primary hover:bg-muted">
+          <i data-lucide="file-spreadsheet" class="size-4"></i> Importar plan Excel
         </button>
         <button type="button" onclick="openNuevoAtletaModal()" class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-95">
           <i data-lucide="user-plus" class="size-4"></i> Nuevo atleta
@@ -1162,19 +1257,34 @@ function viewCoachAtletas() {
       `
     )}
     <div class="space-y-4 px-4 py-6 sm:px-8">
-      <div class="flex flex-col gap-3 md:flex-row md:items-center">
-        <div class="relative md:w-80">
-          <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"></i>
-          <input
-            type="text"
-            value="${esc(State.atletasQuery)}"
-            oninput="State.atletasQuery = this.value; renderApp(true)"
-            id="search-atletas-input"
-            placeholder="Buscar por nombre, apellido, DNI o usuario"
-            class="h-10 w-full rounded-lg border bg-card pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-          />
+      <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div class="relative sm:w-72">
+            <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"></i>
+            <input
+              type="text"
+              value="${esc(State.atletasQuery)}"
+              oninput="State.atletasQuery = this.value; renderApp(true)"
+              id="search-atletas-input"
+              placeholder="Buscar por nombre, apellido, DNI o disciplina"
+              class="h-10 w-full rounded-lg border bg-card pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div class="flex items-center gap-2">
+            <label for="filter-disciplina-select" class="text-xs font-semibold text-muted-foreground whitespace-nowrap">Disciplina:</label>
+            <select
+              id="filter-disciplina-select"
+              onchange="State.atletasDisciplina = this.value; renderApp()"
+              class="h-10 rounded-lg border bg-card px-3 text-sm font-medium outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="Todas" ${State.atletasDisciplina === 'Todas' ? 'selected' : ''}>Todas las disciplinas</option>
+              ${disciplinasCatalogo
+                .map((d) => `<option value="${esc(d)}" ${State.atletasDisciplina === d ? 'selected' : ''}>${esc(d)}</option>`)
+                .join('')}
+            </select>
+          </div>
         </div>
-        <div class="flex flex-wrap gap-2">
+        <div class="flex flex-wrap gap-1.5">
           ${categorias
             .map(
               (c) => `
@@ -1197,13 +1307,14 @@ function viewCoachAtletas() {
         filtrados.length === 0
           ? `<div class="flex flex-col items-center rounded-xl border border-dashed p-12 text-center text-muted-foreground">
               <i data-lucide="users" class="size-8"></i>
-              <p class="mt-2">No hay atletas que coincidan con la búsqueda.</p>
+              <p class="mt-2">No hay atletas que coincidan con la búsqueda o disciplina seleccionada.</p>
             </div>`
           : `<ul class="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
               ${filtrados
                 .map((a) => {
                   const deuda = Helpers.deudaDe(a.id);
                   const vencido = Helpers.tieneVencidos(a.id);
+                  const discList = Array.isArray(a.disciplinas) ? a.disciplinas : [];
                   return `
                   <li>
                     <a href="#/entrenador/atletas/${a.id}" class="block rounded-xl border bg-card p-5 transition-colors hover:border-primary">
@@ -1227,6 +1338,18 @@ function viewCoachAtletas() {
                       <div class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs">
                         <span class="text-muted-foreground">Nac.: <strong>${Helpers.fechaCorta(a.fechaNacimiento)}</strong></span>
                         <span class="font-mono text-primary font-semibold">@${esc(a.usuario)}</span>
+                      </div>
+                      <div class="mt-2.5 flex flex-wrap gap-1">
+                        ${
+                          discList.length > 0
+                            ? discList
+                                .map(
+                                  (d) =>
+                                    `<span class="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">🏃 ${esc(d)}</span>`
+                                )
+                                .join('')
+                            : `<span class="text-[11px] italic text-muted-foreground">Sin disciplina asignada (click para definir en ficha)</span>`
+                        }
                       </div>
                       <div class="mt-3 flex items-center justify-between gap-2 text-sm">
                         <span class="truncate text-xs text-muted-foreground">${esc(a.objetivos[0]?.texto || 'Ficha activa · Escuela Willilefche')}</span>
@@ -1291,6 +1414,9 @@ function viewCoachAtletaFicha(atletaId) {
               <p class="text-sm text-muted-foreground">${hecho.toFixed(1).replace(/\.0$/, '')} de ${total.toFixed(1).replace(/\.0$/, '')} km realizados (${sesiones.length} sesiones visibles)</p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
+              <button type="button" onclick="openImportarPlanExcelModal('${atleta.id}')" class="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-card px-3.5 py-2 text-sm font-semibold text-primary hover:bg-muted">
+                <i data-lucide="file-spreadsheet" class="size-4"></i> Importar desde Excel
+              </button>
               <button type="button" onclick="openDuplicarPlanModal('${atleta.id}')" class="inline-flex items-center gap-1.5 rounded-lg border bg-card px-3.5 py-2 text-sm font-semibold hover:bg-muted">
                 <i data-lucide="copy" class="size-4"></i> Duplicar semana / Copiar plan
               </button>
@@ -1387,7 +1513,7 @@ function viewCoachAtletaFicha(atletaId) {
                 <div>
                   <label class="text-xs font-medium text-muted-foreground">Categoría (${Helpers.edad(atleta.fechaNacimiento)} años)</label>
                   <select id="dp-cat" class="mt-1 h-9 w-full rounded-lg border bg-card px-2 text-sm">
-                    ${['U12', 'U14', 'U16', 'U18', 'U20', 'Mayores', 'Master A', 'Master B']
+                    ${['Infantiles', 'U12', 'U14', 'U16', 'U18', 'U20', 'Mayores', 'Master A', 'Master B']
                       .map((c) => `<option value="${c}" ${atleta.categoria === c ? 'selected' : ''}>${c}</option>`)
                       .join('')}
                   </select>
@@ -1462,11 +1588,24 @@ function viewCoachAtletaFicha(atletaId) {
 
         <section class="rounded-xl border bg-card p-5 h-fit space-y-5">
           <div>
-            <h2 class="text-2xl font-bold">Información deportiva y observaciones</h2>
-            <p class="text-xs text-muted-foreground">Antecedentes, pruebas que practica, apto médico y observaciones libres del entrenador.</p>
+            <h2 class="text-2xl font-bold">Información deportiva, disciplinas y pruebas</h2>
+            <p class="text-xs text-muted-foreground">Definí las disciplinas que entrena el atleta divididas en <strong>Running</strong>, <strong>Pista</strong> y <strong>Campo (Lanzamientos y Saltos)</strong>, sus pruebas específicas, antecedentes y observaciones.</p>
           </div>
-          <form onsubmit="saveInfoDeportivaAtleta(event, '${atleta.id}')" class="space-y-3">
-            <div class="grid grid-cols-2 gap-3">
+          <form onsubmit="saveInfoDeportivaAtleta(event, '${atleta.id}')" class="space-y-4">
+            <div class="rounded-xl border border-primary/25 bg-primary/5 p-3.5 space-y-3">
+              <div class="flex items-center justify-between">
+                <label class="text-xs font-bold uppercase tracking-wide text-primary">🏃 Disciplinas que entrena (Running · Pista · Campo)</label>
+                <span class="text-[11px] text-muted-foreground">Podés marcar una o varias</span>
+              </div>
+              ${renderBloquesDisciplinasCheckboxes('id-disciplinas-chk', atleta.disciplinas || [])}
+              <div class="flex items-center gap-2 pt-1">
+                <input id="id-nueva-disciplina" placeholder="Agregar otra disciplina personalizada al catálogo…" class="h-8 flex-1 rounded-lg border bg-card px-2.5 text-xs" />
+                <button type="button" onclick="agregarNuevaDisciplinaDesdeFicha('${atleta.id}')" class="inline-flex h-8 items-center gap-1 rounded-lg border bg-card px-2.5 text-xs font-semibold hover:bg-muted">
+                  + Sumar disciplina
+                </button>
+              </div>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-[10rem_1fr]">
               <div>
                 <label class="text-xs font-medium text-muted-foreground">Nivel deportivo</label>
                 <select id="id-nivel" class="mt-1 h-9 w-full rounded-lg border bg-card px-2 text-sm">
@@ -1474,9 +1613,48 @@ function viewCoachAtletaFicha(atletaId) {
                 </select>
               </div>
               <div>
-                <label class="text-xs font-medium text-muted-foreground">Pruebas que practica</label>
-                <input id="id-pruebas" value="${esc(atleta.pruebas || '800 m, 1500 m, Cross')}" placeholder="Ej.: 80 m, 150 m, 1500 m, Cross" class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-sm" />
+                <label class="text-xs font-medium text-muted-foreground">Pruebas específicas que practica (Running, Pista y Campo)</label>
+                <input id="id-pruebas" value="${esc(atleta.pruebas || '800 m, 1500 m, Cross')}" placeholder="Ej.: 80 m, 1500 m, Lanzamiento de Jabalina, Salto en Largo" class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-sm font-medium" />
               </div>
+            </div>
+            <div class="rounded-xl border bg-muted/25 p-3 space-y-2.5">
+              <p class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Selector rápido de pruebas (tocá para agregar o quitar de la ficha):
+              </p>
+              ${(window.DISCIPLINAS_POR_BLOQUE || [])
+                .map(
+                  (b) => `
+                  <div class="space-y-1">
+                    <p class="text-[11px] font-bold text-foreground">${esc(b.titulo)}</p>
+                    <div class="flex flex-wrap gap-1">
+                      ${(b.pruebasSugeridas || [])
+                        .map((pr) => {
+                          const activas = String(atleta.pruebas || '')
+                            .split(',')
+                            .map((x) => x.trim().toLowerCase())
+                            .filter(Boolean);
+                          const isAct = activas.includes(pr.toLowerCase());
+                          return `
+                            <button
+                              type="button"
+                              onclick="togglePruebaRapidaEnFicha('${esc(pr)}', this)"
+                              data-prueba="${esc(pr)}"
+                              class="rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                                isAct
+                                  ? 'border-primary bg-primary text-primary-foreground'
+                                  : 'bg-card text-muted-foreground hover:border-primary hover:text-foreground'
+                              }"
+                            >
+                              ${isAct ? '✓ ' : '+ '}${esc(pr)}
+                            </button>
+                          `;
+                        })
+                        .join('')}
+                    </div>
+                  </div>
+                `
+                )
+                .join('')}
             </div>
             <div>
               <label class="text-xs font-medium text-muted-foreground">Antecedentes deportivos</label>
@@ -1767,6 +1945,18 @@ function viewCoachAtletaFicha(atletaId) {
             <p class="mt-1 text-sm text-muted-foreground">
               ${esc(atleta.categoria)} · ${Helpers.edad(atleta.fechaNacimiento)} años · ${esc(atleta.nivel)} · en el equipo desde ${Helpers.fechaCorta(atleta.ingreso)}
             </p>
+            <div class="mt-2 flex flex-wrap items-center gap-1.5">
+              ${
+                Array.isArray(atleta.disciplinas) && atleta.disciplinas.length > 0
+                  ? atleta.disciplinas
+                      .map(
+                        (d) =>
+                          `<span class="inline-flex items-center gap-1 rounded-md bg-primary/15 px-2.5 py-0.5 text-xs font-semibold text-primary">🏃 ${esc(d)}</span>`
+                      )
+                      .join('')
+                  : `<button type="button" onclick="State.fichaTab = 'ficha'; renderApp()" class="inline-flex items-center gap-1 rounded-md border border-dashed px-2.5 py-0.5 text-xs font-medium text-muted-foreground hover:border-primary hover:text-primary">+ Definir disciplinas que entrena</button>`
+              }
+            </div>
           </div>
           <div class="flex flex-wrap items-center gap-2">
             ${
@@ -1832,17 +2022,170 @@ window.saveDatosPersonalesAtleta = (e, atletaId) => {
   renderApp();
 };
 
+function renderBloquesDisciplinasCheckboxes(inputName, selectedDisciplinas = []) {
+  const bloques = window.DISCIPLINAS_POR_BLOQUE || [];
+  const conocidas = new Set(bloques.flatMap((b) => b.disciplinas));
+  const catalogo = Array.isArray(DB.disciplinasDisponibles) ? DB.disciplinasDisponibles : [];
+  const extras = catalogo.filter((d) => !conocidas.has(d));
+
+  return `
+    <div class="space-y-2.5">
+      ${bloques
+        .map(
+          (b) => `
+          <div class="rounded-lg border bg-card p-2.5 space-y-1.5">
+            <p class="text-[11px] font-bold uppercase tracking-wide text-primary">${esc(b.titulo)}</p>
+            <div class="flex flex-wrap gap-1.5">
+              ${b.disciplinas
+                .map((disc) => {
+                  const checked = Array.isArray(selectedDisciplinas) && selectedDisciplinas.includes(disc);
+                  return `
+                    <label class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border bg-muted/25 px-2.5 py-1 text-xs font-semibold transition-colors hover:border-primary ${
+                      checked ? 'border-primary bg-primary/10 text-primary' : ''
+                    }">
+                      <input type="checkbox" name="${inputName}" value="${esc(disc)}" ${checked ? 'checked' : ''} class="size-3.5 accent-primary" />
+                      <span>${esc(disc)}</span>
+                    </label>
+                  `;
+                })
+                .join('')}
+            </div>
+          </div>
+        `
+        )
+        .join('')}
+      ${
+        extras.length > 0
+          ? `<div class="rounded-lg border bg-card p-2.5 space-y-1.5">
+              <p class="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Otras disciplinas personalizadas</p>
+              <div class="flex flex-wrap gap-1.5">
+                ${extras
+                  .map((disc) => {
+                    const checked = Array.isArray(selectedDisciplinas) && selectedDisciplinas.includes(disc);
+                    return `
+                      <label class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border bg-muted/25 px-2.5 py-1 text-xs font-semibold transition-colors hover:border-primary ${
+                        checked ? 'border-primary bg-primary/10 text-primary' : ''
+                      }">
+                        <input type="checkbox" name="${inputName}" value="${esc(disc)}" ${checked ? 'checked' : ''} class="size-3.5 accent-primary" />
+                        <span>${esc(disc)}</span>
+                      </label>
+                    `;
+                  })
+                  .join('')}
+              </div>
+            </div>`
+          : ''
+      }
+    </div>
+  `;
+}
+
+function renderSelectDisciplinasOptions(selectedDisc) {
+  const bloques = window.DISCIPLINAS_POR_BLOQUE || [];
+  const conocidas = new Set(bloques.flatMap((b) => b.disciplinas));
+  const catalogo = Array.isArray(DB.disciplinasDisponibles) ? DB.disciplinasDisponibles : [];
+  const extras = catalogo.filter((d) => !conocidas.has(d));
+
+  return `
+    ${bloques
+      .map(
+        (b) => `
+        <optgroup label="${esc(b.titulo)}">
+          ${b.disciplinas
+            .map(
+              (d) =>
+                `<option value="${esc(d)}" ${d === selectedDisc ? 'selected' : ''}>🏃 ${esc(d)}</option>`
+            )
+            .join('')}
+        </optgroup>
+      `
+      )
+      .join('')}
+    ${
+      extras.length > 0
+        ? `<optgroup label="Otras disciplinas">
+            ${extras
+              .map(
+                (d) =>
+                  `<option value="${esc(d)}" ${d === selectedDisc ? 'selected' : ''}>🏃 ${esc(d)}</option>`
+              )
+              .join('')}
+          </optgroup>`
+        : ''
+    }
+  `;
+}
+
+window.togglePruebaRapidaEnFicha = (prueba, btnEl) => {
+  const inp = document.getElementById('id-pruebas');
+  if (!inp) return;
+  const lista = inp.value
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
+  const idx = lista.findIndex((x) => x.toLowerCase() === prueba.toLowerCase());
+  if (idx >= 0) {
+    lista.splice(idx, 1);
+    if (btnEl) {
+      btnEl.className =
+        'rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors bg-card text-muted-foreground hover:border-primary hover:text-foreground';
+      btnEl.textContent = `+ ${prueba}`;
+    }
+  } else {
+    lista.push(prueba);
+    if (btnEl) {
+      btnEl.className =
+        'rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors border-primary bg-primary text-primary-foreground';
+      btnEl.textContent = `✓ ${prueba}`;
+    }
+  }
+  inp.value = lista.join(', ');
+};
+
+window.agregarNuevaDisciplinaDesdeFicha = (atletaId) => {
+  const inp = document.getElementById('id-nueva-disciplina');
+  if (!inp) return;
+  const val = inp.value.trim();
+  if (!val) return;
+  if (!Array.isArray(DB.disciplinasDisponibles)) {
+    DB.disciplinasDisponibles = ['Running', 'Velocidad', 'Medio Fondo', 'Fondo', 'Cross / Trail', 'Saltos', 'Lanzamientos', 'Marcha', 'Iniciación Atlética'];
+  }
+  if (!DB.disciplinasDisponibles.some((d) => d.toLowerCase() === val.toLowerCase())) {
+    DB.disciplinasDisponibles.push(val);
+  }
+  const a = Helpers.getAtleta(atletaId);
+  if (a) {
+    if (!Array.isArray(a.disciplinas)) a.disciplinas = [];
+    if (!a.disciplinas.includes(val)) a.disciplinas.push(val);
+  }
+  saveDB();
+  showToast(`Disciplina "${val}" agregada y asignada`);
+  renderApp();
+};
+
 window.saveInfoDeportivaAtleta = (e, atletaId) => {
   e.preventDefault();
   const a = Helpers.getAtleta(atletaId);
   if (!a) return;
+  const checkedDiscs = Array.from(document.querySelectorAll('input[name="id-disciplinas-chk"]:checked')).map(
+    (el) => el.value
+  );
+  const nuevaInp = document.getElementById('id-nueva-disciplina')?.value.trim();
+  if (nuevaInp) {
+    if (!Array.isArray(DB.disciplinasDisponibles)) DB.disciplinasDisponibles = [];
+    if (!DB.disciplinasDisponibles.some((d) => d.toLowerCase() === nuevaInp.toLowerCase())) {
+      DB.disciplinasDisponibles.push(nuevaInp);
+    }
+    if (!checkedDiscs.includes(nuevaInp)) checkedDiscs.push(nuevaInp);
+  }
+  a.disciplinas = checkedDiscs;
   a.nivel = document.getElementById('id-nivel').value;
   a.pruebas = document.getElementById('id-pruebas').value.trim();
   a.antecedentes = document.getElementById('id-antecedentes').value.trim();
   a.salud = document.getElementById('id-salud').value.trim();
   a.observacionesEntrenador = document.getElementById('id-observaciones').value.trim();
   saveDB();
-  showToast(`Información deportiva y observaciones de ${a.nombre} guardadas`);
+  showToast(`Disciplinas, información deportiva y observaciones de ${a.nombre} guardadas`);
   renderApp();
 };
 
@@ -2972,6 +3315,308 @@ window.enviarMensajeAtletaAlEntrenador = (e, atletaId) => {
    PORTAL DEL ATLETA Y CUENTA FAMILIAR (AtletaPortal)
    ========================================================================== */
 
+function renderHeroEntrenamientoDia(atleta, sesiones, familia) {
+  const diasSemana = Array.isArray(DB.semanaActual) && DB.semanaActual.length === 7
+    ? DB.semanaActual
+    : [DB.hoy];
+
+  if (!State.portalSelectedDate) {
+    State.portalSelectedDate = DB.hoy;
+  }
+
+  const sesionDelDia = sesiones.find((s) => s.fecha === State.portalSelectedDate);
+  const proximaPendiente =
+    sesiones.find((s) => s.fecha >= DB.hoy && s.tipo !== 'Descanso' && s.estado === 'pendiente') ||
+    sesiones.find((s) => s.tipo !== 'Descanso' && s.estado === 'pendiente') ||
+    sesiones[sesiones.length - 1];
+
+  const sesionActiva = sesionDelDia || (State.portalSelectedDate === DB.hoy ? proximaPendiente : null);
+  const esHoySeleccionado = State.portalSelectedDate === DB.hoy;
+  const carasLabels = [
+    '',
+    '1 · Muy suave 😣',
+    '2 · Cómodo 😕',
+    '3 · Moderado 😐',
+    '4 · Exigente 🙂',
+    '5 · Al máximo 💪',
+  ];
+
+  // Tira táctil de los 7 días de la semana (ideal para celular)
+  const tiraSemanaHtml = `
+    <div class="rounded-2xl border bg-card p-3 shadow-xs">
+      <div class="mb-2 flex items-center justify-between px-1">
+        <span class="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          📅 Tu semana de entrenamiento (tocá un día)
+        </span>
+        ${
+          !esHoySeleccionado
+            ? `<button type="button" onclick="State.portalSelectedDate = '${DB.hoy}'; renderApp()" class="text-xs font-bold text-primary hover:underline">
+                Volver a HOY
+              </button>`
+            : `<span class="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-bold text-primary">Viendo HOY</span>`
+        }
+      </div>
+      <div class="grid grid-cols-7 gap-1.5">
+        ${diasSemana
+          .map((iso) => {
+            const d = Helpers.diaSemana(iso);
+            const ses = sesiones.find((s) => s.fecha === iso);
+            const isSelected = State.portalSelectedDate === iso;
+            const isToday = iso === DB.hoy;
+            let dotCls = 'bg-muted-foreground/25';
+            if (ses) {
+              if (ses.tipo === 'Descanso') dotCls = 'bg-muted-foreground/40';
+              else if (ses.estado === 'realizado') dotCls = 'bg-success';
+              else if (ses.estado === 'no-realizado') dotCls = 'bg-destructive';
+              else dotCls = 'bg-primary';
+            }
+            return `
+              <button
+                type="button"
+                onclick="State.portalSelectedDate = '${iso}'; renderApp()"
+                class="flex flex-col items-center justify-center rounded-xl border py-2 px-1 transition-all ${
+                  isSelected
+                    ? 'border-primary bg-primary text-primary-foreground shadow-sm scale-[1.02]'
+                    : isToday
+                    ? 'border-primary/50 bg-primary/5 text-foreground'
+                    : 'bg-card hover:bg-muted text-foreground'
+                }"
+              >
+                <span class="text-[10px] font-bold uppercase ${isSelected ? 'text-primary-foreground/90' : isToday ? 'text-primary' : 'text-muted-foreground'}">
+                  ${isToday ? 'HOY' : d.dia}
+                </span>
+                <span class="font-display text-xl font-extrabold leading-tight">${d.num}</span>
+                <span class="mt-1 size-2 rounded-full ${isSelected ? 'bg-white' : dotCls}"></span>
+              </button>
+            `;
+          })
+          .join('')}
+      </div>
+    </div>
+  `;
+
+  if (!sesionActiva) {
+    const dSel = Helpers.diaSemana(State.portalSelectedDate);
+    return `
+      <div class="space-y-3">
+        ${tiraSemanaHtml}
+        <section class="rounded-2xl border-2 border-dashed bg-card p-6 text-center">
+          <p class="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+            ${dSel.dia} ${dSel.num} de ${dSel.mes}
+          </p>
+          <h2 class="mt-1 text-xl font-bold">Sin sesión asignada para este día</h2>
+          <p class="mt-1 text-sm text-muted-foreground">
+            No hay un entrenamiento cargado en esta fecha.
+          </p>
+          ${
+            proximaPendiente
+              ? `<button
+                  type="button"
+                  onclick="State.portalSelectedDate = '${proximaPendiente.fecha}'; renderApp()"
+                  class="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-95"
+                >
+                  Ver próximo entrenamiento (${Helpers.fechaCorta(proximaPendiente.fecha)}) →
+                </button>`
+              : ''
+          }
+        </section>
+      </div>
+    `;
+  }
+
+  const dAct = Helpers.diaSemana(sesionActiva.fecha);
+  const esFechaHoy = sesionActiva.fecha === DB.hoy;
+  const esDescanso = sesionActiva.tipo === 'Descanso';
+
+  return `
+    <div class="space-y-3">
+      ${tiraSemanaHtml}
+
+      <section class="overflow-hidden rounded-2xl border-2 ${
+        sesionActiva.estado === 'realizado'
+          ? 'border-success/60 bg-card'
+          : sesionActiva.estado === 'no-realizado'
+          ? 'border-destructive/50 bg-card'
+          : 'border-primary bg-card shadow-md'
+      }">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b ${
+          sesionActiva.estado === 'realizado'
+            ? 'bg-success-soft/60'
+            : 'bg-primary/10'
+        } px-4 py-3 sm:px-5">
+          <div class="flex items-center gap-2">
+            <span class="inline-flex items-center gap-1.5 rounded-lg bg-primary px-2.5 py-1 text-xs font-extrabold uppercase tracking-wide text-primary-foreground">
+              <i data-lucide="flame" class="size-3.5"></i>
+              ${esFechaHoy ? 'Entrenamiento de HOY' : `Sesión del ${dAct.dia} ${dAct.num} ${dAct.mes}`}
+            </span>
+            ${
+              sesionActiva.disciplina
+                ? `<span class="inline-flex items-center rounded-lg border border-primary/30 bg-card px-2.5 py-1 text-xs font-bold text-primary">
+                    🏃 ${esc(sesionActiva.disciplina)}
+                  </span>`
+                : ''
+            }
+          </div>
+          <div class="flex items-center gap-2">
+            ${sesionActiva.intensidad ? renderIntensidadChip(sesionActiva.intensidad) : ''}
+            ${renderEstadoSesionBadge(sesionActiva.estado)}
+          </div>
+        </div>
+
+        <div class="p-4 sm:p-6 space-y-4">
+          <div>
+            <p class="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              ${esc(sesionActiva.tipo || 'Entrenamiento')} · ${Helpers.fechaCorta(sesionActiva.fecha)}
+            </p>
+            <h2 class="mt-1 font-display text-3xl font-extrabold uppercase leading-tight sm:text-4xl">
+              ${esc(sesionActiva.titulo)}
+            </h2>
+          </div>
+
+          ${
+            sesionActiva.detalle
+              ? `<div class="rounded-xl border bg-muted/35 p-4">
+                  <p class="text-[11px] font-bold uppercase tracking-wide text-primary">
+                    📋 Desarrollo e indicaciones de tu entrenador
+                  </p>
+                  <p class="mt-1.5 text-base font-medium leading-relaxed text-foreground whitespace-pre-line">${esc(sesionActiva.detalle)}</p>
+                </div>`
+              : ''
+          }
+
+          ${
+            sesionActiva.distanciaKm || sesionActiva.duracionMin || sesionActiva.ritmo || sesionActiva.series || sesionActiva.recuperacion
+              ? `<div class="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                  ${
+                    sesionActiva.distanciaKm
+                      ? `<div class="rounded-xl border bg-card p-3">
+                          <p class="text-[11px] font-semibold uppercase text-muted-foreground">Distancia</p>
+                          <p class="mt-0.5 font-display text-2xl font-bold tabular-nums">${esc(sesionActiva.distanciaKm)} km</p>
+                        </div>`
+                      : ''
+                  }
+                  ${
+                    sesionActiva.duracionMin
+                      ? `<div class="rounded-xl border bg-card p-3">
+                          <p class="text-[11px] font-semibold uppercase text-muted-foreground">Duración</p>
+                          <p class="mt-0.5 font-display text-2xl font-bold tabular-nums">${esc(sesionActiva.duracionMin)} min</p>
+                        </div>`
+                      : ''
+                  }
+                  ${
+                    sesionActiva.ritmo
+                      ? `<div class="rounded-xl border bg-card p-3">
+                          <p class="text-[11px] font-semibold uppercase text-muted-foreground">Ritmo / Marca obj.</p>
+                          <p class="mt-0.5 font-display text-2xl font-bold tabular-nums text-primary">${esc(sesionActiva.ritmo)}</p>
+                        </div>`
+                      : ''
+                  }
+                  ${
+                    sesionActiva.series
+                      ? `<div class="rounded-xl border bg-card p-3 col-span-2 sm:col-span-1">
+                          <p class="text-[11px] font-semibold uppercase text-muted-foreground">Series / Pasadas</p>
+                          <p class="mt-0.5 text-sm font-bold leading-snug">${esc(sesionActiva.series)}</p>
+                        </div>`
+                      : ''
+                  }
+                  ${
+                    sesionActiva.recuperacion
+                      ? `<div class="rounded-xl border bg-card p-3 col-span-2">
+                          <p class="text-[11px] font-semibold uppercase text-muted-foreground">Recuperación / Pausa</p>
+                          <p class="mt-0.5 text-sm font-semibold">${esc(sesionActiva.recuperacion)}</p>
+                        </div>`
+                      : ''
+                  }
+                </div>`
+              : ''
+          }
+
+          ${
+            !esDescanso && !familia
+              ? sesionActiva.estado === 'pendiente'
+                ? `<div class="rounded-2xl border-2 border-primary/30 bg-primary/5 p-4 space-y-3">
+                    <div class="flex items-start gap-2.5">
+                      <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-sm">
+                        !
+                      </div>
+                      <div>
+                        <p class="text-sm font-bold text-foreground">¿Ya terminaste el entrenamiento?</p>
+                        <p class="text-xs text-muted-foreground">
+                          Tocá el botón verde para informarle al entrenador tus tiempos, marcas logradas y cómo te sentiste hoy.
+                        </p>
+                      </div>
+                    </div>
+                    <div class="grid gap-2.5 sm:grid-cols-[1fr_auto]">
+                      <button
+                        type="button"
+                        onclick="openRegistroModal('${atleta.id}', '${sesionActiva.id}', true)"
+                        class="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-base font-extrabold text-primary-foreground shadow-sm transition-transform active:scale-[0.99] hover:opacity-95"
+                      >
+                        <i data-lucide="check-circle-2" class="size-5"></i>
+                        ¡Completé el entrenamiento! · Informar resultados
+                      </button>
+                      <button
+                        type="button"
+                        onclick="openRegistroModal('${atleta.id}', '${sesionActiva.id}', false)"
+                        class="flex min-h-12 items-center justify-center gap-1.5 rounded-xl border border-destructive/40 bg-card px-4 py-3 text-xs font-bold text-destructive hover:bg-destructive/10"
+                      >
+                        ✕ Hoy no pude entrenar
+                      </button>
+                    </div>
+                  </div>`
+                : `<div class="rounded-2xl border ${
+                    sesionActiva.estado === 'realizado'
+                      ? 'border-success/40 bg-success-soft/40'
+                      : 'border-destructive/40 bg-destructive/10'
+                  } p-4 space-y-2">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                      <p class="text-xs font-extrabold uppercase tracking-wide ${
+                        sesionActiva.estado === 'realizado' ? 'text-success' : 'text-destructive'
+                      }">
+                        ${
+                          sesionActiva.estado === 'realizado'
+                            ? '✓ Entrenamiento informado a tu entrenador'
+                            : '✕ Informaste que no pudiste realizar esta sesión'
+                        }
+                      </p>
+                      <button
+                        type="button"
+                        onclick="openRegistroModal('${atleta.id}', '${sesionActiva.id}')"
+                        class="inline-flex items-center gap-1 rounded-lg border bg-card px-3 py-1.5 text-xs font-bold text-foreground hover:bg-muted"
+                      >
+                        <i data-lucide="pencil" class="size-3.5"></i> Editar informe enviado
+                      </button>
+                    </div>
+                    ${
+                      sesionActiva.resultadoReal || sesionActiva.distanciaRealKm || sesionActiva.tiempoRealMin
+                        ? `<p class="text-sm font-bold text-foreground">
+                            📊 Resultado informado: ${esc(sesionActiva.resultadoReal || 'Completado')}
+                            ${sesionActiva.distanciaRealKm ? ` · ${esc(sesionActiva.distanciaRealKm)} km` : ''}
+                            ${sesionActiva.tiempoRealMin ? ` · ${esc(sesionActiva.tiempoRealMin)} min` : ''}
+                          </p>`
+                        : ''
+                    }
+                    ${
+                      sesionActiva.sensacion
+                        ? `<p class="text-xs font-semibold text-foreground">
+                            Esfuerzo percibido: <span class="font-bold">${carasLabels[sesionActiva.sensacion] || `${sesionActiva.sensacion}/5`}</span>
+                          </p>`
+                        : ''
+                    }
+                    ${
+                      sesionActiva.comentario
+                        ? `<p class="text-sm text-muted-foreground">💬 “${esc(sesionActiva.comentario)}”</p>`
+                        : ''
+                    }
+                  </div>`
+              : ''
+          }
+        </div>
+      </section>
+    </div>
+  `;
+}
+
 function viewAtletaPortal(atletaId, modoFamilia = false) {
   const session = Auth.getSession();
   const isCoachPreview = session && session.role === 'coach';
@@ -2982,7 +3627,6 @@ function viewAtletaPortal(atletaId, modoFamilia = false) {
   const deuda = pagos.filter((p) => p.estado !== 'pagado').reduce((t, p) => t + p.monto, 0);
   const proxima = DB.competencias.find((c) => c.inscriptos.includes(atleta.id));
   const sugeridas = DB.competencias.filter((c) => c.sugeridos.includes(atleta.id));
-  const hoy = sesiones.find((s) => s.fecha === DB.hoy);
   const kmPlan = sesiones.reduce((t, s) => t + (s.distanciaKm || 0), 0);
   const kmHechos = sesiones.filter((s) => s.estado === 'realizado').reduce((t, s) => t + (s.distanciaKm || 0), 0);
 
@@ -3041,66 +3685,63 @@ function viewAtletaPortal(atletaId, modoFamilia = false) {
   if (State.portalTab === 'semana') {
     const sesionesFiltradas = filtrarSesionesPorPeriodo(sesiones, State.planFiltro);
     const filtrosPlan = [
-      { id: 'todas', label: 'Todas' },
-      { id: 'semana', label: 'Semana' },
+      { id: 'semana', label: 'Esta Semana' },
       { id: 'mes', label: 'Mes' },
-      { id: 'dia', label: 'Hoy (Día)' },
+      { id: 'todas', label: 'Todas' },
+      { id: 'dia', label: 'Solo Hoy' },
     ];
     tabBody = `
       <div class="grid gap-6 lg:grid-cols-[1fr_23rem]">
-        <div class="space-y-3">
-          ${
-            hoy && hoy.estado === 'pendiente' && !familia
-              ? `<div class="flex flex-col gap-3 rounded-xl bg-primary p-4 text-primary-foreground sm:flex-row sm:items-center">
-                  <p class="flex-1 font-medium">Hoy toca <strong>${esc(hoy.titulo)}</strong>. ¿Ya entrenaste?</p>
-                  <button type="button" onclick="openRegistroModal('${atleta.id}', '${hoy.id}')" class="rounded-lg bg-secondary px-4 py-2 text-sm font-semibold text-secondary-foreground hover:opacity-95">
-                    Registrar entrenamiento
+        <div class="space-y-5">
+          ${renderHeroEntrenamientoDia(atleta, sesiones, familia)}
+
+          <div class="space-y-3 pt-2">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <h3 class="text-lg font-bold">Cronograma completo de sesiones</h3>
+              <div class="flex gap-1 rounded-lg bg-muted p-1">
+                ${filtrosPlan
+                  .map(
+                    (f) => `
+                  <button
+                    type="button"
+                    onclick="State.planFiltro = '${f.id}'; renderApp()"
+                    class="rounded-md px-3 py-1 text-xs font-semibold ${
+                      State.planFiltro === f.id ? 'bg-card shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'
+                    }"
+                  >
+                    ${f.label}
                   </button>
-                </div>`
-              : ''
-          }
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <div class="flex gap-1 rounded-lg bg-muted p-1">
-              ${filtrosPlan
-                .map(
-                  (f) => `
-                <button
-                  type="button"
-                  onclick="State.planFiltro = '${f.id}'; renderApp()"
-                  class="rounded-md px-3 py-1 text-xs font-semibold ${
-                    State.planFiltro === f.id ? 'bg-card shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'
-                  }"
-                >
-                  ${f.label}
-                </button>
-              `
-                )
-                .join('')}
-            </div>
-            <span class="text-xs text-muted-foreground">${sesionesFiltradas.length} entrenamiento${sesionesFiltradas.length === 1 ? '' : 's'}</span>
-          </div>
-          ${
-            sesionesFiltradas.length === 0
-              ? `<div class="rounded-xl border border-dashed p-10 text-center text-muted-foreground">
-                  No hay entrenamientos cargados para este período.
-                </div>`
-              : sesionesFiltradas
-                  .map((s) =>
-                    renderSessionCard(
-                      s,
-                      !familia && s.tipo !== 'Descanso'
-                        ? `<button type="button" onclick="openRegistroModal('${atleta.id}', '${s.id}')" class="mt-3 inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                            s.estado === 'pendiente'
-                              ? 'bg-primary text-primary-foreground'
-                              : 'hover:bg-muted -ml-2 text-foreground'
-                          }">
-                            ${s.estado === 'pendiente' ? 'Registrar sesión realizada / sensación' : 'Editar registro y sensación'}
-                          </button>`
-                        : ''
-                    )
+                `
                   )
-                  .join('')
-          }
+                  .join('')}
+              </div>
+            </div>
+            ${
+              sesionesFiltradas.length === 0
+                ? `<div class="rounded-xl border border-dashed p-10 text-center text-muted-foreground">
+                    No hay entrenamientos cargados para este período.
+                  </div>`
+                : sesionesFiltradas
+                    .map((s) =>
+                      renderSessionCard(
+                        s,
+                        !familia && s.tipo !== 'Descanso'
+                          ? `<div class="mt-3 flex flex-wrap gap-2">
+                              <button type="button" onclick="openRegistroModal('${atleta.id}', '${s.id}', true)" class="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-bold ${
+                                s.estado === 'pendiente'
+                                  ? 'bg-primary text-primary-foreground shadow-2xs'
+                                  : 'border bg-card hover:bg-muted text-foreground'
+                              }">
+                                <i data-lucide="clipboard-check" class="size-3.5"></i>
+                                ${s.estado === 'pendiente' ? 'Informar resultados al entrenador' : 'Editar informe y resultados'}
+                              </button>
+                            </div>`
+                          : ''
+                      )
+                    )
+                    .join('')
+            }
+          </div>
         </div>
         <aside class="space-y-4">
           ${sugeridasCardHtml}
@@ -3369,8 +4010,8 @@ function viewAtletaPortal(atletaId, modoFamilia = false) {
         </div>
       </header>
 
-      <div class="mx-auto max-w-content px-4 sm:px-6">
-        <div class="flex gap-2 overflow-x-auto border-b">
+      <div class="mx-auto max-w-content px-4 sm:px-6 pb-24 sm:pb-8">
+        <div class="hidden sm:flex gap-2 overflow-x-auto border-b">
           ${[
             ['semana', 'Mi semana y Objetivos'],
             ['resultados', 'Resultados y Carreras'],
@@ -3395,8 +4036,37 @@ function viewAtletaPortal(atletaId, modoFamilia = false) {
             )
             .join('')}
         </div>
-        <div class="py-6">${tabBody}</div>
+        <div class="py-4 sm:py-6">${tabBody}</div>
       </div>
+
+      <!-- Barra de Navegación Inferior Fija para Móviles (Estilo App Nativa) -->
+      <nav class="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-md border-t border-border px-2 py-1.5 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] flex items-center justify-around">
+        ${[
+          { id: 'semana', label: 'Hoy / Plan', icon: 'flame' },
+          { id: 'resultados', label: 'Mis Marcas', icon: 'trophy' },
+          { id: 'pagos', label: 'Mis Pagos', icon: 'wallet', badge: deuda > 0 },
+          { id: 'avisos', label: 'Mensajes', icon: 'message-square' },
+        ]
+          .map((item) => {
+            const isAct = State.portalTab === item.id;
+            return `
+              <button
+                type="button"
+                onclick="State.portalTab = '${item.id}'; renderApp()"
+                class="flex flex-1 flex-col items-center justify-center py-1 relative transition-colors ${
+                  isAct ? 'text-primary font-bold' : 'text-muted-foreground hover:text-foreground font-medium'
+                }"
+              >
+                <div class="relative">
+                  <i data-lucide="${item.icon}" class="size-5 ${isAct ? 'stroke-[2.5]' : 'stroke-[1.8]'}"></i>
+                  ${item.badge ? `<span class="absolute -top-1 -right-1 size-2 rounded-full bg-destructive ring-2 ring-card"></span>` : ''}
+                </div>
+                <span class="mt-1 text-[11px] font-semibold tracking-tight leading-none">${item.label}</span>
+              </button>
+            `;
+          })
+          .join('')}
+      </nav>
     </div>
   `;
 }
@@ -3881,12 +4551,15 @@ window.openSessionModal = (atletaId, sesionId = null) => {
   const tipoActual = sesion?.tipo || 'Rodaje';
   const zonaActual = sesion?.intensidad || 'Z2';
   const categorias = Array.from(new Set(DB.atletas.map((a) => a.categoria).filter(Boolean)));
+  const disciplinasCatalogo = Array.isArray(DB.disciplinasDisponibles) && DB.disciplinasDisponibles.length > 0
+    ? DB.disciplinasDisponibles
+    : ['Running', 'Velocidad', 'Medio Fondo', 'Fondo', 'Cross / Trail', 'Saltos', 'Lanzamientos', 'Marcha', 'Iniciación Atlética'];
 
   showModalHtml(`
     <div class="flex items-start justify-between">
       <div>
         <h2 class="text-xl font-bold">${sesion ? 'Modificar entrenamiento' : 'Nuevo entrenamiento'}</h2>
-        <p class="text-sm text-muted-foreground">Plan de ${esc(atleta.nombre)}.${sesion ? ' El atleta verá el aviso de modificación.' : ' Podés asignarlo individualmente o por grupo.'}</p>
+        <p class="text-sm text-muted-foreground">Plan de ${esc(atleta.nombre)}.${sesion ? ' El atleta verá el aviso de modificación.' : ' Podés asignarlo individualmente, por disciplina o por categoría.'}</p>
       </div>
       <button type="button" onclick="closeModal()" class="text-muted-foreground hover:text-foreground">✕</button>
     </div>
@@ -3894,9 +4567,12 @@ window.openSessionModal = (atletaId, sesionId = null) => {
       ${
         !sesion
           ? `<div class="space-y-1">
-              <label class="text-xs font-semibold uppercase tracking-wide text-primary">Asignar a (Atleta o Grupo)</label>
+              <label class="text-xs font-semibold uppercase tracking-wide text-primary">Asignar a (Atleta, Disciplina o Categoría)</label>
               <select id="s-dest" class="h-10 w-full rounded-lg border bg-card px-3 text-sm font-medium">
                 <option value="${atleta.id}">👤 Solo a ${esc(Helpers.nombreCompleto(atleta))}</option>
+                ${disciplinasCatalogo
+                  .map((d) => `<option value="__DISC__:${esc(d)}">🏃 Disciplina: ${esc(d)}</option>`)
+                  .join('')}
                 <option value="__CAT__:${esc(atleta.categoria)}">🏷️ Categoría ${esc(atleta.categoria)} completa</option>
                 <option value="__TODOS__">👥 Todo el grupo (${DB.atletas.length} atletas)</option>
                 ${categorias
@@ -4006,6 +4682,15 @@ window.saveSessionModal = (e, atletaId, sesionId) => {
   let targets = [];
   if (destVal === '__TODOS__') {
     targets = DB.atletas;
+  } else if (destVal.startsWith('__DISC__:')) {
+    const disc = destVal.replace('__DISC__:', '');
+    targets = DB.atletas.filter(
+      (a) => Array.isArray(a.disciplinas) && a.disciplinas.some((d) => d.toLowerCase() === disc.toLowerCase())
+    );
+    if (targets.length === 0) {
+      showToast(`Ningún atleta tiene asignada aún la disciplina "${disc}". Asignala primero en sus fichas.`, 'info');
+      return;
+    }
   } else if (destVal.startsWith('__CAT__:')) {
     const cat = destVal.replace('__CAT__:', '');
     targets = DB.atletas.filter((a) => a.categoria === cat);
@@ -4037,13 +4722,16 @@ window.saveSessionModal = (e, atletaId, sesionId) => {
   renderApp();
 };
 
-// 1b. Modal para Duplicar Semana (+7 días) o Copiar Plan a otro atleta/grupo
+// 1b. Modal para Duplicar Semana (+7 días) o Copiar Plan a otro atleta/grupo/disciplina
 window.openDuplicarPlanModal = (atletaId) => {
   const atleta = Helpers.getAtleta(atletaId);
   if (!atleta) return;
   const sesiones = Helpers.getPlan(atleta.id);
   const otrosAtletas = DB.atletas.filter((a) => a.id !== atleta.id);
   const categorias = Array.from(new Set(DB.atletas.map((a) => a.categoria).filter(Boolean)));
+  const disciplinasCatalogo = Array.isArray(DB.disciplinasDisponibles) && DB.disciplinasDisponibles.length > 0
+    ? DB.disciplinasDisponibles
+    : ['Running', 'Velocidad', 'Medio Fondo', 'Fondo', 'Cross / Trail', 'Saltos', 'Lanzamientos', 'Marcha', 'Iniciación Atlética'];
 
   showModalHtml(`
     <div class="flex items-start justify-between">
@@ -4066,7 +4754,7 @@ window.openDuplicarPlanModal = (atletaId) => {
         <label class="flex items-start gap-2.5 rounded-lg border p-3 cursor-pointer hover:bg-muted/40">
           <input type="radio" name="dup-modo" value="copiar_a_otros" onchange="document.getElementById('dup-dest-box').classList.remove('hidden')" class="mt-0.5 size-4" />
           <div class="text-sm">
-            <p class="font-semibold">Copiar este plan a otro atleta, categoría o grupo</p>
+            <p class="font-semibold">Copiar este plan a otra disciplina, categoría o atleta</p>
             <p class="text-xs text-muted-foreground">Copia las sesiones de ${esc(atleta.nombre)} con sus mismas fechas a los destinatarios seleccionados.</p>
           </div>
         </label>
@@ -4075,6 +4763,9 @@ window.openDuplicarPlanModal = (atletaId) => {
       <div id="dup-dest-box" class="hidden space-y-1.5 rounded-lg border bg-muted/30 p-3">
         <label class="text-xs font-semibold">Destinatario del plan copiado</label>
         <select id="dup-dest" class="h-10 w-full rounded-lg border bg-card px-3 text-sm">
+          ${disciplinasCatalogo
+            .map((d) => `<option value="__DISC__:${esc(d)}">🏃 Todos los atletas de Disciplina: ${esc(d)}</option>`)
+            .join('')}
           <option value="__CAT__:${esc(atleta.categoria)}">🏷️ Toda la categoría ${esc(atleta.categoria)}</option>
           <option value="__TODOS__">👥 Todo el grupo (Todos los atletas)</option>
           ${categorias
@@ -4097,7 +4788,6 @@ window.openDuplicarPlanModal = (atletaId) => {
 
 window.saveDuplicarPlanModal = (e, atletaId) => {
   e.preventDefault();
-  const atleta = Helpers.getAtleta(atletaId);
   const sesionesOrigen = Helpers.getPlan(atletaId);
   if (sesionesOrigen.length === 0) {
     closeModal();
@@ -4134,6 +4824,18 @@ window.saveDuplicarPlanModal = (e, atletaId) => {
   let targets = [];
   if (destVal === '__TODOS__') {
     targets = DB.atletas.filter((a) => a.id !== atletaId);
+  } else if (destVal.startsWith('__DISC__:')) {
+    const disc = destVal.replace('__DISC__:', '');
+    targets = DB.atletas.filter(
+      (a) =>
+        a.id !== atletaId &&
+        Array.isArray(a.disciplinas) &&
+        a.disciplinas.some((d) => d.toLowerCase() === disc.toLowerCase())
+    );
+    if (targets.length === 0) {
+      showToast(`No hay otros atletas con la disciplina "${disc}" asignada.`, 'info');
+      return;
+    }
   } else if (destVal.startsWith('__CAT__:')) {
     const cat = destVal.replace('__CAT__:', '');
     targets = DB.atletas.filter((a) => a.categoria === cat && a.id !== atletaId);
@@ -4161,88 +4863,1345 @@ window.saveDuplicarPlanModal = (e, atletaId) => {
   renderApp();
 };
 
-// 2. Modal de Registro del Atleta (Lo hice / No pude + Sensación 1-5 + Comentario)
-let tempRegHecho = true;
-let tempRegSensacion = 4;
+/* ==========================================================================
+   HERRAMIENTA DE IMPORTACIÓN DE PLANIFICACIÓN DESDE EXCEL ("Planilla de Carga")
+   Y GESTIÓN DE DISCIPLINAS EN LOTE
+   ========================================================================== */
 
-window.openRegistroModal = (atletaId, sesionId) => {
-  const sesion = (DB.planes[atletaId] || []).find((s) => s.id === sesionId);
-  if (!sesion) return;
-  tempRegHecho = sesion.estado !== 'no-realizado';
-  tempRegSensacion = sesion.sensacion || 4;
-  renderRegistroModalContent(atletaId, sesion);
+window._excelPlanImportState = {
+  defaultAtletaId: null,
+  fileName: '',
+  metaAtleta: '',
+  metaDisciplina: 'Running',
+  metaObjetivo: '',
+  mondayStart: '',
+  modoDestino: 'disciplina', // 'individual' | 'disciplina' | 'categoria' | 'manual'
+  selectedAtletaId: '',
+  selectedDisciplina: 'Running',
+  selectedCategoria: 'U16',
+  manualAtletaIds: [],
+  manualSearch: '',
+  rawRows: [],
+  parsedSessions: [],
+  assignDisciplinaToTargets: true,
+  addObjetivoToTargets: true,
+  replaceSameDates: true,
 };
 
-function renderRegistroModalContent(atletaId, sesion) {
-  const caras = ['😣', '😕', '😐', '🙂', '💪'];
-  const comentarioActual = document.getElementById('reg-com')?.value ?? (sesion.comentario || '');
+function getMondayOfDateISO(isoDate) {
+  const [y, m, d] = (isoDate || DB.hoy).split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const dow = dt.getUTCDay(); // 0=Dom, 1=Lun
+  const diff = dow === 0 ? -6 : 1 - dow;
+  dt.setUTCDate(dt.getUTCDate() + diff);
+  return dt.toISOString().slice(0, 10);
+}
 
-  showModalHtml(`
+function addDaysISO(isoDate, days) {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+}
+
+function normalizeAscii(str) {
+  return String(str || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function parseExcelRowsToSessions(rawRows, mondayStart) {
+  const dowMap = {
+    lunes: 0,
+    lun: 0,
+    martes: 1,
+    mar: 1,
+    miercoles: 2,
+    mie: 2,
+    jueves: 3,
+    jue: 3,
+    viernes: 4,
+    vie: 4,
+    sabado: 5,
+    sab: 5,
+    domingo: 6,
+    dom: 6,
+  };
+
+  let weekIndex = 0;
+  let lastDow = -1;
+  let sequentialOffset = 0;
+  const sessions = [];
+
+  for (const r of rawRows) {
+    const diaRaw = String(r.dia || '').trim();
+    const actividad = String(r.actividad || '').trim();
+    const objetivo = String(r.objetivo || '').trim();
+    const duracionRaw = String(r.duracion || '').trim();
+    const observaciones = String(r.observaciones || '').trim();
+
+    const diaNorm = normalizeAscii(diaRaw).split(/\s+/)[0];
+    let fechaCalculada = '';
+
+    // 1. Verificar si la celda Día es una fecha explícita YYYY-MM-DD o DD/MM/YYYY
+    if (/^\d{4}-\d{2}-\d{2}$/.test(diaRaw)) {
+      fechaCalculada = diaRaw;
+    } else if (/^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/.test(diaRaw)) {
+      const parts = diaRaw.split(/[/-]/);
+      const dd = parts[0].padStart(2, '0');
+      const mm = parts[1].padStart(2, '0');
+      const yyyy = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
+      fechaCalculada = `${yyyy}-${mm}-${dd}`;
+    } else if (dowMap[diaNorm] !== undefined) {
+      const dow = dowMap[diaNorm];
+      if (lastDow !== -1 && dow <= lastDow) {
+        weekIndex++;
+      }
+      lastDow = dow;
+      const totalOffset = weekIndex * 7 + dow;
+      fechaCalculada = addDaysISO(mondayStart, totalOffset);
+    } else {
+      fechaCalculada = addDaysISO(mondayStart, sequentialOffset);
+    }
+    sequentialOffset++;
+
+    // Si la fila está completamente vacía en Actividad, Objetivo, Duración y Observaciones, la omitimos
+    if (!actividad && !objetivo && !duracionRaw && !observaciones) {
+      continue;
+    }
+
+    const textoCompleto = `${actividad} ${objetivo} ${observaciones}`.toLowerCase();
+
+    // Inferir tipo e intensidad
+    let tipo = 'Rodaje';
+    let intensidad = 'Z2';
+    if (/\b(descanso|libre|reposo)\b/i.test(textoCompleto)) {
+      tipo = 'Descanso';
+      intensidad = undefined;
+    } else if (/\b(pasadas|series|repeticiones|velocidad|pista|interval|frad|fartlek|\d+\s*[x×]\s*\d+)\b/i.test(textoCompleto)) {
+      tipo = /\bfartlek\b/i.test(textoCompleto) ? 'Fartlek' : 'Pasadas';
+      intensidad = 'Z4';
+    } else if (/\b(cuestas|subidas|lomas)\b/i.test(textoCompleto)) {
+      tipo = 'Cuestas';
+      intensidad = 'Z4';
+    } else if (/\b(fondo|largo|tirada)\b/i.test(textoCompleto)) {
+      tipo = 'Fondo';
+      intensidad = 'Z2';
+    } else if (/\b(fuerza|gimnasio|core|fortalecimiento|pesas|circuito)\b/i.test(textoCompleto)) {
+      tipo = 'Fuerza';
+      intensidad = 'Z3';
+    } else if (/\b(regenerativo|suave|trote suave|recuperacion)\b/i.test(textoCompleto)) {
+      tipo = 'Rodaje';
+      intensidad = 'Z1';
+    } else if (/\b(tempo|ritmo|umbral|controlado)\b/i.test(textoCompleto)) {
+      tipo = 'Rodaje';
+      intensidad = 'Z3';
+    }
+
+    // Extraer duración en minutos
+    let duracionMin = undefined;
+    if (duracionRaw) {
+      const hmMatch = duracionRaw.match(/(\d+)\s*(?:h|hs|hora|horas|:)\s*(\d+)?/i);
+      if (hmMatch) {
+        duracionMin = Number(hmMatch[1]) * 60 + (hmMatch[2] ? Number(hmMatch[2]) : 0);
+      } else {
+        const numMatch = duracionRaw.match(/(\d+(?:[.,]\d+)?)/);
+        if (numMatch) {
+          duracionMin = Math.round(Number(numMatch[1].replace(',', '.')));
+        }
+      }
+    }
+
+    // Extraer distancia en km si figura en actividad u objetivo
+    let distanciaKm = undefined;
+    const kmMatch = `${actividad} ${objetivo}`.match(/(\d+(?:[.,]\d+)?)\s*(?:km|kilometros|kilómetros|k)\b/i);
+    if (kmMatch) {
+      distanciaKm = Number(kmMatch[1].replace(',', '.'));
+    }
+
+    // Extraer series si figura patrón NxM
+    let series = undefined;
+    const seriesMatch = actividad.match(/(\d+\s*[x×]\s*\d+\s*(?:m|mts|km|min|'|")?)/i);
+    if (seriesMatch) {
+      series = seriesMatch[1].trim();
+    }
+
+    // Construir Título y Descripción detallada
+    let titulo = '';
+    if (objetivo && actividad) {
+      titulo = actividad.length <= 52 ? actividad : `${objetivo} · ${actividad.slice(0, 42)}…`;
+    } else if (actividad) {
+      titulo = actividad.length <= 58 ? actividad : `${actividad.slice(0, 55)}…`;
+    } else if (objetivo) {
+      titulo = objetivo;
+    } else {
+      titulo = `Entrenamiento (${diaRaw})`;
+    }
+
+    const partesDetalle = [];
+    if (actividad) partesDetalle.push(actividad);
+    if (objetivo) partesDetalle.push(`Objetivo: ${objetivo}`);
+    if (duracionRaw && !duracionMin) partesDetalle.push(`Duración: ${duracionRaw}`);
+    if (observaciones) partesDetalle.push(`Observaciones: ${observaciones}`);
+
+    sessions.push({
+      diaLabel: diaRaw || 'Día',
+      fecha: fechaCalculada,
+      tipo,
+      intensidad,
+      titulo,
+      detalle: partesDetalle.join(' | '),
+      actividadRaw: actividad,
+      objetivoRaw: objetivo,
+      duracionRaw,
+      observacionesRaw: observaciones,
+      duracionMin,
+      distanciaKm,
+      series,
+    });
+  }
+
+  return sessions;
+}
+
+window.downloadPlanillaCargaExcel = (atletaId = null) => {
+  const atleta = atletaId ? Helpers.getAtleta(atletaId) : null;
+  const discStr =
+    atleta && Array.isArray(atleta.disciplinas) && atleta.disciplinas[0]
+      ? atleta.disciplinas[0]
+      : State.atletasDisciplina !== 'Todas'
+      ? State.atletasDisciplina
+      : 'Running';
+  const objStr =
+    atleta && Array.isArray(atleta.objetivos) && atleta.objetivos[0]
+      ? atleta.objetivos[0].texto
+      : '15 Km';
+
+  const aoa = [
+    ['CORREDORES WILLILEFCHE', '', '', '', ''],
+    ['Entrenador CECS Nivel 1', '', '', '', ''],
+    [DB.equipo?.entrenador || 'Cristian Javier Torres', '', '', '', ''],
+    ['Atleta', atleta ? Helpers.nombreCompleto(atleta) : 'Nombre del Atleta o Grupo', '', '', ''],
+    ['Disciplina', discStr, '', '', ''],
+    ['Objetivo', objStr, '', '', ''],
+    ['Día', 'Actividad / Desarrollo detallado', 'Objetivo', 'Duración', 'Observaciones'],
+    ['Lunes ', '', '', '', ''],
+    ['Martes ', '', '', '', ''],
+    ['Miércoles ', '', '', '', ''],
+    ['Jueves ', '', '', '', ''],
+    ['Viernes ', '', '', '', ''],
+    ['Sábado ', '', '', '', ''],
+    ['Domingo ', '', '', '', ''],
+    ['Lunes ', '', '', '', ''],
+    ['Martes ', '', '', '', ''],
+    ['Miércoles ', '', '', '', ''],
+    ['Jueves ', '', '', '', ''],
+    ['Viernes ', '', '', '', ''],
+    ['Sábado ', '', '', '', ''],
+    ['Domingo ', '', '', '', ''],
+  ];
+
+  if (window.XLSX) {
+    const ws = window.XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = [{ wch: 16 }, { wch: 48 }, { wch: 24 }, { wch: 15 }, { wch: 32 }];
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, 'Planificacion');
+    const slug = atleta ? atleta.usuario.replace(/[^a-z0-9]/gi, '_') : 'Willilefche';
+    window.XLSX.writeFile(wb, `Planilla_de_Carga_${slug}.xlsx`);
+    showToast('Planilla de Carga (.xlsx) descargada');
+  } else {
+    showToast('Cargando librería Excel, intentá nuevamente en un segundo', 'info');
+  }
+};
+
+window.openImportarPlanExcelModal = (defaultAtletaId = null) => {
+  const session = Auth.getSession();
+  if (!session || session.role !== 'coach') return;
+
+  const atleta = defaultAtletaId ? Helpers.getAtleta(defaultAtletaId) : null;
+  const defaultDisc =
+    atleta && Array.isArray(atleta.disciplinas) && atleta.disciplinas[0]
+      ? atleta.disciplinas[0]
+      : State.atletasDisciplina !== 'Todas'
+      ? State.atletasDisciplina
+      : 'Running';
+
+  window._excelPlanImportState = {
+    defaultAtletaId: defaultAtletaId || null,
+    fileName: '',
+    metaAtleta: atleta ? Helpers.nombreCompleto(atleta) : '',
+    metaDisciplina: defaultDisc,
+    metaObjetivo: '',
+    mondayStart: getMondayOfDateISO(DB.hoy),
+    modoDestino: atleta ? 'individual' : 'disciplina',
+    selectedAtletaId: atleta ? atleta.id : DB.atletas[0]?.id || '',
+    selectedDisciplina: defaultDisc,
+    selectedCategoria: atleta ? atleta.categoria : 'U16',
+    manualAtletaIds: atleta ? [atleta.id] : [],
+    manualSearch: '',
+    rawRows: [],
+    parsedSessions: [],
+    assignDisciplinaToTargets: true,
+    addObjetivoToTargets: true,
+    replaceSameDates: true,
+  };
+
+  renderImportarPlanExcelModal();
+};
+
+window.renderImportarPlanExcelModal = () => {
+  const st = window._excelPlanImportState;
+  const disciplinasCatalogo =
+    Array.isArray(DB.disciplinasDisponibles) && DB.disciplinasDisponibles.length > 0
+      ? DB.disciplinasDisponibles
+      : ['Running', 'Velocidad', 'Medio Fondo', 'Fondo', 'Cross / Trail', 'Saltos', 'Lanzamientos', 'Marcha', 'Iniciación Atlética'];
+  if (st.metaDisciplina && !disciplinasCatalogo.some((d) => d.toLowerCase() === st.metaDisciplina.toLowerCase())) {
+    disciplinasCatalogo.push(st.metaDisciplina);
+  }
+  const categorias = ['Infantiles', 'U12', 'U14', 'U16', 'U18', 'U20', 'Mayores'];
+
+  // Calcular atletas destinatarios según el modo actual
+  let atletasEnDisciplina = DB.atletas.filter(
+    (a) => Array.isArray(a.disciplinas) && a.disciplinas.some((d) => d.toLowerCase() === st.selectedDisciplina.toLowerCase())
+  );
+
+  showModalHtml(
+    `
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="grid size-8 place-items-center rounded-lg bg-primary/15 text-primary">
+            <i data-lucide="file-spreadsheet" class="size-5"></i>
+          </span>
+          <h2 class="text-xl font-bold">Importar Planificación desde Excel</h2>
+        </div>
+        <p class="mt-1 text-xs text-muted-foreground">
+          Subí tu archivo con formato <strong>Planilla de Carga.xlsx</strong> para asignarlo a un atleta individual o a un grupo por disciplina o categoría.
+        </p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button
+          type="button"
+          onclick="downloadPlanillaCargaExcel(${st.defaultAtletaId ? `'${st.defaultAtletaId}'` : 'null'})"
+          class="inline-flex items-center gap-1.5 rounded-lg border bg-card px-3 py-1.5 text-xs font-semibold hover:bg-muted"
+          title="Descargar plantilla en blanco con el formato oficial Planilla de Carga"
+        >
+          <i data-lucide="download" class="size-3.5 text-primary"></i> Descargar Planilla de Carga (.xlsx)
+        </button>
+        <button type="button" onclick="closeModal()" class="text-muted-foreground hover:text-foreground">✕</button>
+      </div>
+    </div>
+
+    <div class="mt-4 space-y-4">
+      <!-- Paso 1: Subir archivo Excel y elegir Lunes de inicio -->
+      <div class="grid gap-3 rounded-xl border bg-muted/30 p-3.5 sm:grid-cols-[1fr_13rem]">
+        <div>
+          <label class="text-xs font-bold uppercase tracking-wide text-primary">1. Seleccionar archivo Excel (.xlsx, .xls, .csv)</label>
+          <input
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            onchange="handlePlanExcelFileSelect(this)"
+            class="mt-1.5 block w-full text-xs text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3.5 file:py-2 file:text-xs file:font-semibold file:text-primary-foreground hover:file:opacity-95 cursor-pointer"
+          />
+          ${
+            st.fileName
+              ? `<p class="mt-1.5 text-xs font-medium text-success">✓ Archivo cargado: <strong>${esc(st.fileName)}</strong> (${st.parsedSessions.length} sesiones con actividad detectadas)</p>`
+              : `<p class="mt-1.5 text-[11px] text-muted-foreground">Respeta el formato: Fila 4 Atleta · Fila 5 Disciplina · Fila 6 Objetivo · Fila 7 Encabezados · Fila 8+ Lunes a Domingo.</p>`
+          }
+        </div>
+        <div>
+          <label class="text-xs font-bold uppercase tracking-wide text-foreground">Lunes de inicio (Semana 1)</label>
+          <input
+            type="date"
+            value="${esc(st.mondayStart)}"
+            onchange="updatePlanExcelMondayStart(this.value)"
+            class="mt-1.5 h-9 w-full rounded-lg border bg-card px-2.5 text-xs font-semibold"
+          />
+          <p class="mt-1 text-[11px] text-muted-foreground">Calcula las fechas de cada día.</p>
+        </div>
+      </div>
+
+      ${
+        st.fileName
+          ? `
+        <!-- Datos detectados en el encabezado del Excel -->
+        <div class="grid grid-cols-3 gap-2.5 rounded-xl border border-primary/25 bg-primary/5 p-3 text-xs">
+          <div>
+            <span class="text-muted-foreground block">Atleta / Grupo en Excel (B4):</span>
+            <strong class="text-sm">${esc(st.metaAtleta || '—')}</strong>
+          </div>
+          <div>
+            <span class="text-muted-foreground block">Disciplina en Excel (B5):</span>
+            <strong class="text-sm text-primary">🏃 ${esc(st.metaDisciplina || '—')}</strong>
+          </div>
+          <div>
+            <span class="text-muted-foreground block">Objetivo en Excel (B6):</span>
+            <strong class="text-sm">${esc(st.metaObjetivo || '—')}</strong>
+          </div>
+        </div>
+      `
+          : ''
+      }
+
+      <!-- Paso 2: Selección de Destinatarios (Individual, por Disciplina, por Categoría o Selección Manual) -->
+      <div class="rounded-xl border bg-card p-3.5 space-y-3">
+        <label class="text-xs font-bold uppercase tracking-wide text-primary block">2. ¿A quiénes querés aplicar esta planificación?</label>
+        <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <button
+            type="button"
+            onclick="setExcelImportModo('disciplina')"
+            class="rounded-lg border px-3 py-2 text-left text-xs font-semibold transition-colors ${
+              st.modoDestino === 'disciplina' ? 'border-primary bg-primary/10 text-primary' : 'bg-card hover:bg-muted'
+            }"
+          >
+            🏃 Por Disciplina
+            <span class="block text-[10px] font-normal text-muted-foreground">Grupo según disciplina</span>
+          </button>
+          <button
+            type="button"
+            onclick="setExcelImportModo('individual')"
+            class="rounded-lg border px-3 py-2 text-left text-xs font-semibold transition-colors ${
+              st.modoDestino === 'individual' ? 'border-primary bg-primary/10 text-primary' : 'bg-card hover:bg-muted'
+            }"
+          >
+            👤 Atleta Individual
+            <span class="block text-[10px] font-normal text-muted-foreground">Un solo corredor</span>
+          </button>
+          <button
+            type="button"
+            onclick="setExcelImportModo('categoria')"
+            class="rounded-lg border px-3 py-2 text-left text-xs font-semibold transition-colors ${
+              st.modoDestino === 'categoria' ? 'border-primary bg-primary/10 text-primary' : 'bg-card hover:bg-muted'
+            }"
+          >
+            🏷️ Por Categoría
+            <span class="block text-[10px] font-normal text-muted-foreground">Infantiles, U12, U16…</span>
+          </button>
+          <button
+            type="button"
+            onclick="setExcelImportModo('manual')"
+            class="rounded-lg border px-3 py-2 text-left text-xs font-semibold transition-colors ${
+              st.modoDestino === 'manual' ? 'border-primary bg-primary/10 text-primary' : 'bg-card hover:bg-muted'
+            }"
+          >
+            ☑️ Selección Manual
+            <span class="block text-[10px] font-normal text-muted-foreground">Elegir atletas a medida</span>
+          </button>
+        </div>
+
+        ${
+          st.modoDestino === 'disciplina'
+            ? `
+          <div class="space-y-2.5 pt-1">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <label class="text-xs font-semibold">Disciplina:</label>
+                <select
+                  onchange="changeExcelImportDisciplina(this.value)"
+                  class="h-9 rounded-lg border bg-card px-3 text-xs font-semibold"
+                >
+                  ${renderSelectDisciplinasOptions(st.selectedDisciplina)}
+                </select>
+              </div>
+              <button
+                type="button"
+                onclick="openAsignarDisciplinasLoteModal('${esc(st.selectedDisciplina)}')"
+                class="text-xs font-semibold text-primary hover:underline"
+              >
+                + Configurar qué atletas entrenan ${esc(st.selectedDisciplina)}
+              </button>
+            </div>
+            ${
+              atletasEnDisciplina.length === 0
+                ? `<div class="rounded-lg border border-dashed bg-muted/40 p-3 text-xs text-muted-foreground">
+                    Todavía no hay atletas marcados con la disciplina <strong>${esc(st.selectedDisciplina)}</strong>.
+                    Podés hacer clic en <strong>"+ Configurar qué atletas entrenan ${esc(st.selectedDisciplina)}"</strong> arriba o cambiar a <strong>"☑️ Selección Manual"</strong> para elegir a los atletas ahora mismo (y se les asignará la disciplina automáticamente).
+                  </div>`
+                : `<div class="rounded-lg border bg-muted/30 p-2.5">
+                    <p class="mb-1.5 text-xs font-semibold">Se importará a estos ${atletasEnDisciplina.length} atletas de ${esc(st.selectedDisciplina)}:</p>
+                    <div class="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+                      ${atletasEnDisciplina
+                        .map(
+                          (a) =>
+                            `<span class="inline-flex items-center gap-1 rounded-md border bg-card px-2 py-0.5 text-xs font-medium">${esc(a.apellido)}, ${esc(a.nombre)} <span class="text-[10px] text-muted-foreground">(${esc(a.categoria)})</span></span>`
+                        )
+                        .join('')}
+                    </div>
+                  </div>`
+            }
+          </div>
+        `
+            : st.modoDestino === 'individual'
+            ? `
+          <div class="pt-1">
+            <label class="text-xs font-semibold">Seleccionar Atleta:</label>
+            <select
+              onchange="window._excelPlanImportState.selectedAtletaId = this.value; renderImportarPlanExcelModal()"
+              class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-xs font-semibold"
+            >
+              ${DB.atletas
+                .slice()
+                .sort((a, b) => a.apellido.localeCompare(b.apellido))
+                .map(
+                  (a) =>
+                    `<option value="${a.id}" ${a.id === st.selectedAtletaId ? 'selected' : ''}>${esc(a.apellido)}, ${esc(a.nombre)} (${esc(a.categoria)} · DNI ${esc(a.dni)})</option>`
+                )
+                .join('')}
+            </select>
+          </div>
+        `
+            : st.modoDestino === 'categoria'
+            ? `
+          <div class="pt-1">
+            <label class="text-xs font-semibold">Seleccionar Categoría:</label>
+            <select
+              onchange="window._excelPlanImportState.selectedCategoria = this.value; renderImportarPlanExcelModal()"
+              class="mt-1 h-9 w-full rounded-lg border bg-card px-3 text-xs font-semibold"
+            >
+              ${categorias
+                .map((c) => {
+                  const cant = DB.atletas.filter((a) => a.categoria === c).length;
+                  return `<option value="${c}" ${c === st.selectedCategoria ? 'selected' : ''}>Categoría ${c} (${cant} atletas)</option>`;
+                })
+                .join('')}
+            </select>
+          </div>
+        `
+            : `
+          <div class="space-y-2 pt-1">
+            <div class="flex items-center justify-between gap-2">
+              <input
+                type="text"
+                value="${esc(st.manualSearch)}"
+                oninput="window._excelPlanImportState.manualSearch = this.value; renderImportarPlanExcelModal()"
+                placeholder="Filtrar atletas por nombre, categoría o disciplina…"
+                class="h-8 flex-1 rounded-lg border bg-card px-2.5 text-xs"
+              />
+              <span class="text-xs font-semibold text-primary">${st.manualAtletaIds.length} seleccionados</span>
+            </div>
+            <div class="grid max-h-40 grid-cols-1 gap-1 overflow-y-auto rounded-lg border bg-muted/20 p-2 sm:grid-cols-2">
+              ${DB.atletas
+                .filter((a) =>
+                  `${a.apellido} ${a.nombre} ${a.categoria} ${(a.disciplinas || []).join(' ')}`
+                    .toLowerCase()
+                    .includes(st.manualSearch.trim().toLowerCase())
+                )
+                .sort((a, b) => a.apellido.localeCompare(b.apellido))
+                .map((a) => {
+                  const checked = st.manualAtletaIds.includes(a.id);
+                  return `
+                    <label class="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs hover:bg-muted">
+                      <input
+                        type="checkbox"
+                        ${checked ? 'checked' : ''}
+                        onchange="toggleExcelManualAtleta('${a.id}', this.checked)"
+                        class="size-3.5 accent-primary"
+                      />
+                      <span class="truncate font-medium">${esc(a.apellido)}, ${esc(a.nombre)}</span>
+                      <span class="ml-auto text-[10px] text-muted-foreground">${esc(a.categoria)}</span>
+                    </label>
+                  `;
+                })
+                .join('')}
+            </div>
+          </div>
+        `
+        }
+
+        <div class="flex flex-wrap gap-4 border-t pt-2.5 text-xs">
+          <label class="inline-flex cursor-pointer items-center gap-1.5">
+            <input
+              type="checkbox"
+              ${st.assignDisciplinaToTargets ? 'checked' : ''}
+              onchange="window._excelPlanImportState.assignDisciplinaToTargets = this.checked"
+              class="size-3.5 accent-primary"
+            />
+            <span>Vincular la disciplina <strong>${esc(st.metaDisciplina || st.selectedDisciplina)}</strong> en la ficha de los atletas</span>
+          </label>
+          <label class="inline-flex cursor-pointer items-center gap-1.5">
+            <input
+              type="checkbox"
+              ${st.addObjetivoToTargets ? 'checked' : ''}
+              onchange="window._excelPlanImportState.addObjetivoToTargets = this.checked"
+              class="size-3.5 accent-primary"
+            />
+            <span>Guardar el objetivo de la planilla (${esc(st.metaObjetivo || 'si figura en B6')}) en sus fichas</span>
+          </label>
+          <label class="inline-flex cursor-pointer items-center gap-1.5">
+            <input
+              type="checkbox"
+              ${st.replaceSameDates ? 'checked' : ''}
+              onchange="window._excelPlanImportState.replaceSameDates = this.checked"
+              class="size-3.5 accent-primary"
+            />
+            <span>Reemplazar sesiones previas en esas mismas fechas</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Paso 3: Vista previa de sesiones detectadas -->
+      <div class="rounded-xl border bg-card">
+        <div class="flex items-center justify-between border-b px-3.5 py-2.5">
+          <p class="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+            3. Vista previa de sesiones a importar (${st.parsedSessions.length})
+          </p>
+        </div>
+        ${
+          st.parsedSessions.length === 0
+            ? `<div class="p-6 text-center text-xs text-muted-foreground">
+                ${
+                  st.fileName
+                    ? 'El archivo seleccionado tiene las filas de Actividad vacías. Completá al menos un día en la columna "Actividad / Desarrollo detallado" y volvé a subirlo.'
+                    : 'Seleccioná un archivo Excel (.xlsx) arriba para previsualizar los días, fechas y actividades antes de importar.'
+                }
+              </div>`
+            : `<div class="max-h-56 overflow-y-auto">
+                <table class="w-full text-left text-xs">
+                  <thead class="sticky top-0 border-b bg-muted text-[11px] font-semibold text-muted-foreground">
+                    <tr>
+                      <th class="px-3 py-2">Día / Fecha</th>
+                      <th class="px-3 py-2">Actividad / Desarrollo detallado</th>
+                      <th class="px-3 py-2">Objetivo</th>
+                      <th class="px-3 py-2">Duración</th>
+                      <th class="px-3 py-2">Observaciones</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y">
+                    ${st.parsedSessions
+                      .map(
+                        (s) => `
+                      <tr>
+                        <td class="px-3 py-2 whitespace-nowrap">
+                          <span class="font-semibold">${esc(s.diaLabel)}</span>
+                          <span class="block text-[10px] font-mono text-muted-foreground">${Helpers.fechaCorta(s.fecha)}</span>
+                        </td>
+                        <td class="px-3 py-2">
+                          <span class="font-medium text-foreground">${esc(s.actividadRaw || s.titulo)}</span>
+                        </td>
+                        <td class="px-3 py-2 text-muted-foreground">${esc(s.objetivoRaw || '—')}</td>
+                        <td class="px-3 py-2 whitespace-nowrap font-mono">${esc(s.duracionRaw || (s.duracionMin ? s.duracionMin + ' min' : '—'))}</td>
+                        <td class="px-3 py-2 text-muted-foreground">${esc(s.observacionesRaw || '—')}</td>
+                      </tr>
+                    `
+                      )
+                      .join('')}
+                  </tbody>
+                </table>
+              </div>`
+        }
+      </div>
+
+      <div class="flex justify-end gap-2 pt-1">
+        <button type="button" onclick="closeModal()" class="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onclick="confirmImportPlanExcel()"
+          ${st.parsedSessions.length === 0 ? 'disabled' : ''}
+          class="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:opacity-95 disabled:opacity-40"
+        >
+          <i data-lucide="check" class="size-4"></i> Confirmar e Importar Planificación
+        </button>
+      </div>
+    </div>
+  `,
+    'max-w-4xl'
+  );
+};
+
+window.setExcelImportModo = (modo) => {
+  window._excelPlanImportState.modoDestino = modo;
+  renderImportarPlanExcelModal();
+};
+
+window.changeExcelImportDisciplina = (disc) => {
+  window._excelPlanImportState.selectedDisciplina = disc;
+  window._excelPlanImportState.metaDisciplina = disc;
+  renderImportarPlanExcelModal();
+};
+
+window.toggleExcelManualAtleta = (atletaId, checked) => {
+  const arr = window._excelPlanImportState.manualAtletaIds;
+  if (checked && !arr.includes(atletaId)) arr.push(atletaId);
+  if (!checked) {
+    window._excelPlanImportState.manualAtletaIds = arr.filter((id) => id !== atletaId);
+  }
+};
+
+window.updatePlanExcelMondayStart = (newDate) => {
+  if (!newDate) return;
+  const st = window._excelPlanImportState;
+  st.mondayStart = newDate;
+  if (st.rawRows.length > 0) {
+    st.parsedSessions = parseExcelRowsToSessions(st.rawRows, st.mondayStart);
+  }
+  renderImportarPlanExcelModal();
+};
+
+window.handlePlanExcelFileSelect = (fileInput) => {
+  const file = fileInput.files && fileInput.files[0];
+  if (!file) return;
+  if (!window.XLSX) {
+    showToast('La librería Excel aún se está cargando. Revisá tu conexión e intentá de nuevo.', 'info');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = window.XLSX.read(data, { type: 'array' });
+      const firstSheetName = wb.SheetNames[0];
+      const sheet = wb.Sheets[firstSheetName];
+      const rows = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+      const st = window._excelPlanImportState;
+      st.fileName = file.name;
+
+      let headerRowIdx = -1;
+      for (let i = 0; i < Math.min(rows.length, 15); i++) {
+        const row = rows[i] || [];
+        const colA = normalizeAscii(row[0]);
+        const colB = String(row[1] || '').trim();
+        if (colA === 'atleta' && colB) {
+          st.metaAtleta = colB;
+        } else if (colA === 'disciplina' && colB) {
+          st.metaDisciplina = colB;
+          st.selectedDisciplina = colB;
+          if (
+            Array.isArray(DB.disciplinasDisponibles) &&
+            !DB.disciplinasDisponibles.some((d) => d.toLowerCase() === colB.toLowerCase())
+          ) {
+            DB.disciplinasDisponibles.push(colB);
+          }
+        } else if (colA === 'objetivo' && colB && headerRowIdx === -1) {
+          st.metaObjetivo = colB;
+        } else if (
+          (colA === 'dia' || colA === 'fecha') &&
+          normalizeAscii(row[1]).includes('actividad')
+        ) {
+          headerRowIdx = i;
+          break;
+        }
+      }
+
+      if (headerRowIdx === -1) {
+        headerRowIdx = 6; // Fila 7 por defecto en Planilla de Carga.xlsx
+      }
+
+      // Intentar vincular automáticamente si el nombre en B4 coincide con un atleta de la base
+      if (st.metaAtleta && !st.defaultAtletaId) {
+        const metaNorm = normalizeAscii(st.metaAtleta);
+        const matchAtleta = DB.atletas.find((a) => {
+          const full1 = normalizeAscii(`${a.nombre} ${a.apellido}`);
+          const full2 = normalizeAscii(`${a.apellido} ${a.nombre}`);
+          const firstLast = normalizeAscii(`${a.nombre.split(' ')[0]} ${a.apellido.split(' ')[0]}`);
+          return (
+            full1 === metaNorm ||
+            full2 === metaNorm ||
+            firstLast === metaNorm ||
+            full1.includes(metaNorm)
+          );
+        });
+        if (matchAtleta) {
+          st.selectedAtletaId = matchAtleta.id;
+          st.modoDestino = 'individual';
+        }
+      }
+
+      const rawRows = [];
+      for (let i = headerRowIdx + 1; i < rows.length; i++) {
+        const r = rows[i] || [];
+        rawRows.push({
+          dia: r[0] ?? '',
+          actividad: r[1] ?? '',
+          objetivo: r[2] ?? '',
+          duracion: r[3] ?? '',
+          observaciones: r[4] ?? '',
+        });
+      }
+
+      st.rawRows = rawRows;
+      st.parsedSessions = parseExcelRowsToSessions(rawRows, st.mondayStart);
+      renderImportarPlanExcelModal();
+    } catch (err) {
+      console.error('Error leyendo Excel:', err);
+      alert('No se pudo leer el archivo Excel: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+};
+
+window.confirmImportPlanExcel = () => {
+  const st = window._excelPlanImportState;
+  if (!st || st.parsedSessions.length === 0) {
+    showToast('No hay sesiones con actividad para importar.', 'info');
+    return;
+  }
+
+  let targets = [];
+  if (st.modoDestino === 'individual') {
+    const a = Helpers.getAtleta(st.selectedAtletaId);
+    if (a) targets = [a];
+  } else if (st.modoDestino === 'disciplina') {
+    targets = DB.atletas.filter(
+      (a) =>
+        Array.isArray(a.disciplinas) &&
+        a.disciplinas.some((d) => d.toLowerCase() === st.selectedDisciplina.toLowerCase())
+    );
+    if (targets.length === 0) {
+      showToast(
+        `Aún no hay atletas asignados a la disciplina "${st.selectedDisciplina}". Asignalos primero o usá Selección Manual.`,
+        'info'
+      );
+      return;
+    }
+  } else if (st.modoDestino === 'categoria') {
+    targets = DB.atletas.filter((a) => a.categoria === st.selectedCategoria);
+  } else if (st.modoDestino === 'manual') {
+    targets = DB.atletas.filter((a) => st.manualAtletaIds.includes(a.id));
+  }
+
+  if (targets.length === 0) {
+    showToast('Seleccioná al menos un atleta destinatario.', 'info');
+    return;
+  }
+
+  const discToAssign = (st.metaDisciplina || st.selectedDisciplina || '').trim();
+  const objToAssign = (st.metaObjetivo || '').trim();
+  const importedDates = new Set(st.parsedSessions.map((s) => s.fecha));
+
+  targets.forEach((atleta, aIdx) => {
+    // 1. Asignar disciplina si corresponde
+    if (st.assignDisciplinaToTargets && discToAssign) {
+      if (!Array.isArray(atleta.disciplinas)) atleta.disciplinas = [];
+      if (!atleta.disciplinas.some((d) => d.toLowerCase() === discToAssign.toLowerCase())) {
+        atleta.disciplinas.push(discToAssign);
+      }
+    }
+
+    // 2. Guardar objetivo general (B6) en la ficha del atleta si no lo tenía
+    if (st.addObjetivoToTargets && objToAssign) {
+      if (!Array.isArray(atleta.objetivos)) atleta.objetivos = [];
+      const objTexto = discToAssign ? `${discToAssign}: ${objToAssign}` : objToAssign;
+      const yaExisteObj = atleta.objetivos.some(
+        (o) => normalizeAscii(o.texto) === normalizeAscii(objTexto) || normalizeAscii(o.texto) === normalizeAscii(objToAssign)
+      );
+      if (!yaExisteObj) {
+        atleta.objetivos.push({
+          id: `obj-xls-${Date.now()}-${aIdx}`,
+          texto: objTexto,
+          tipo: 'entrenador',
+          progreso: 0,
+        });
+      }
+    }
+
+    // 3. Cargar sesiones en el plan del atleta
+    let planActual = DB.planes[atleta.id] || [];
+    if (st.replaceSameDates) {
+      planActual = planActual.filter((s) => !importedDates.has(s.fecha));
+    }
+
+    const nuevasSesiones = st.parsedSessions.map((s, sIdx) => ({
+      id: `xls-${Date.now()}-${aIdx}-${sIdx}`,
+      fecha: s.fecha,
+      tipo: s.tipo,
+      intensidad: s.intensidad,
+      titulo: s.titulo,
+      detalle: s.detalle,
+      distanciaKm: s.distanciaKm,
+      duracionMin: s.duracionMin,
+      series: s.series,
+      disciplina: discToAssign || undefined,
+      estado: 'pendiente',
+      modificada: false,
+    }));
+
+    DB.planes[atleta.id] = [...planActual, ...nuevasSesiones].sort((x, y) =>
+      (x.fecha || '').localeCompare(y.fecha || '')
+    );
+  });
+
+  saveDB();
+  closeModal();
+  showToast(
+    `Se importaron ${st.parsedSessions.length} sesiones de entrenamiento para ${targets.length} atleta${
+      targets.length === 1 ? '' : 's'
+    }`
+  );
+  renderApp();
+};
+
+// Modal para asignar una disciplina en lote a múltiples atletas rápidamente
+window.openAsignarDisciplinasLoteModal = (defaultDisciplina = 'Running') => {
+  const disciplinasCatalogo =
+    Array.isArray(DB.disciplinasDisponibles) && DB.disciplinasDisponibles.length > 0
+      ? DB.disciplinasDisponibles
+      : ['Running', 'Velocidad', 'Medio Fondo', 'Fondo', 'Cross / Trail', 'Saltos', 'Lanzamientos', 'Marcha', 'Iniciación Atlética'];
+
+  window._loteDiscState = {
+    disciplina: defaultDisciplina || disciplinasCatalogo[0],
+    catFilter: 'Todas',
+    search: '',
+  };
+  renderAsignarDisciplinasLoteModal();
+};
+
+window.renderAsignarDisciplinasLoteModal = () => {
+  const st = window._loteDiscState;
+  const disciplinasCatalogo =
+    Array.isArray(DB.disciplinasDisponibles) && DB.disciplinasDisponibles.length > 0
+      ? DB.disciplinasDisponibles
+      : ['Running', 'Velocidad', 'Medio Fondo', 'Fondo', 'Cross / Trail', 'Saltos', 'Lanzamientos', 'Marcha', 'Iniciación Atlética'];
+  const categorias = ['Todas', 'Infantiles', 'U12', 'U14', 'U16', 'U18', 'U20', 'Mayores'];
+
+  const atletasFiltrados = DB.atletas
+    .filter((a) => {
+      const mCat = st.catFilter === 'Todas' || a.categoria === st.catFilter;
+      const mSearch = `${a.apellido} ${a.nombre} ${a.dni || ''}`
+        .toLowerCase()
+        .includes(st.search.trim().toLowerCase());
+      return mCat && mSearch;
+    })
+    .sort((a, b) => a.apellido.localeCompare(b.apellido));
+
+  const totalConDisciplina = DB.atletas.filter(
+    (a) => Array.isArray(a.disciplinas) && a.disciplinas.includes(st.disciplina)
+  ).length;
+
+  showModalHtml(
+    `
     <div class="flex items-start justify-between">
       <div>
-        <h2 class="text-xl font-bold">${esc(sesion.titulo)}</h2>
-        <p class="text-sm text-muted-foreground">Contale a tu entrenador cómo te fue.</p>
+        <h2 class="text-xl font-bold">Asignar Disciplinas a los Atletas</h2>
+        <p class="text-xs text-muted-foreground">
+          Definí rápidamente qué atletas entrenan cada disciplina para poder importarles planes grupales desde Excel.
+        </p>
       </div>
       <button type="button" onclick="closeModal()" class="text-muted-foreground hover:text-foreground">✕</button>
     </div>
-    <div class="mt-4 space-y-5">
-      <div class="grid grid-cols-2 gap-2">
+
+    <div class="mt-4 space-y-4">
+      <div class="grid gap-3 rounded-xl border bg-primary/5 p-3.5 sm:grid-cols-[1fr_auto]">
+        <div>
+          <label class="text-xs font-bold uppercase tracking-wide text-primary">Disciplina seleccionada (Running · Pista · Campo)</label>
+          <select
+            onchange="window._loteDiscState.disciplina = this.value; renderAsignarDisciplinasLoteModal()"
+            class="mt-1 h-10 w-full rounded-lg border bg-card px-3 text-sm font-semibold"
+          >
+            ${renderSelectDisciplinasOptions(st.disciplina)}
+          </select>
+        </div>
+        <div class="flex items-end gap-2">
+          <input id="lote-nueva-disc" placeholder="Nueva disciplina…" class="h-10 w-40 rounded-lg border bg-card px-2.5 text-xs" />
+          <button
+            type="button"
+            onclick="crearDisciplinaDesdeLote()"
+            class="h-10 rounded-lg border bg-card px-3 text-xs font-semibold hover:bg-muted"
+          >
+            + Crear
+          </button>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex flex-wrap gap-1">
+          ${categorias
+            .map(
+              (c) => `
+            <button
+              type="button"
+              onclick="window._loteDiscState.catFilter = '${c}'; renderAsignarDisciplinasLoteModal()"
+              class="rounded-full border px-2.5 py-1 text-xs font-medium ${
+                st.catFilter === c ? 'border-ink bg-ink text-ink-foreground' : 'bg-card hover:bg-muted'
+              }"
+            >
+              ${c}
+            </button>
+          `
+            )
+            .join('')}
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            onclick="marcarTodosDisciplinaVisible(true)"
+            class="rounded-md border bg-card px-2.5 py-1 text-xs font-semibold hover:bg-muted"
+          >
+            Marcar visibles (${atletasFiltrados.length})
+          </button>
+          <button
+            type="button"
+            onclick="marcarTodosDisciplinaVisible(false)"
+            class="rounded-md border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted"
+          >
+            Desmarcar visibles
+          </button>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between gap-2">
+        <input
+          type="text"
+          value="${esc(st.search)}"
+          oninput="window._loteDiscState.search = this.value; renderAsignarDisciplinasLoteModal()"
+          placeholder="Buscar atleta por apellido o nombre…"
+          class="h-9 flex-1 rounded-lg border bg-card px-3 text-xs"
+        />
+        <span class="text-xs font-semibold text-primary">${totalConDisciplina} atletas en ${esc(st.disciplina)}</span>
+      </div>
+
+      <div class="grid max-h-64 grid-cols-1 gap-1.5 overflow-y-auto rounded-xl border bg-muted/20 p-2.5 sm:grid-cols-2">
+        ${atletasFiltrados
+          .map((a) => {
+            const hasDisc = Array.isArray(a.disciplinas) && a.disciplinas.includes(st.disciplina);
+            return `
+              <label class="flex cursor-pointer items-center gap-2.5 rounded-lg border bg-card px-3 py-2 text-xs transition-colors hover:border-primary">
+                <input
+                  type="checkbox"
+                  ${hasDisc ? 'checked' : ''}
+                  onchange="toggleAtletaDisciplinaLote('${a.id}', this.checked)"
+                  class="size-4 accent-primary"
+                />
+                <div class="min-w-0 flex-1">
+                  <p class="truncate font-semibold">${esc(a.apellido)}, ${esc(a.nombre)}</p>
+                  <p class="text-[10px] text-muted-foreground">${esc(a.categoria)} · ${(a.disciplinas || []).join(', ') || 'Sin disciplinas'}</p>
+                </div>
+              </label>
+            `;
+          })
+          .join('')}
+      </div>
+
+      <div class="flex justify-end gap-2 pt-1">
         <button
           type="button"
-          onclick="setRegHecho(true, '${atletaId}', '${sesion.id}')"
-          class="flex items-center justify-center gap-2 rounded-lg border py-3 font-semibold ${
-            tempRegHecho ? 'border-success bg-success-soft text-success' : 'hover:bg-muted'
-          }"
+          onclick="saveDB(); closeModal(); showToast('Disciplinas guardadas'); renderApp()"
+          class="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:opacity-95"
         >
-          ✓ Lo hice
-        </button>
-        <button
-          type="button"
-          onclick="setRegHecho(false, '${atletaId}', '${sesion.id}')"
-          class="flex items-center justify-center gap-2 rounded-lg border py-3 font-semibold ${
-            !tempRegHecho ? 'border-destructive bg-destructive/10 text-destructive' : 'hover:bg-muted'
-          }"
-        >
-          ✕ No pude
+          Listo y Guardar
         </button>
       </div>
+    </div>
+  `,
+    'max-w-3xl'
+  );
+};
+
+window.crearDisciplinaDesdeLote = () => {
+  const inp = document.getElementById('lote-nueva-disc');
+  const val = inp ? inp.value.trim() : '';
+  if (!val) return;
+  if (!Array.isArray(DB.disciplinasDisponibles)) DB.disciplinasDisponibles = [];
+  if (!DB.disciplinasDisponibles.some((d) => d.toLowerCase() === val.toLowerCase())) {
+    DB.disciplinasDisponibles.push(val);
+  }
+  window._loteDiscState.disciplina = val;
+  saveDB();
+  renderAsignarDisciplinasLoteModal();
+};
+
+window.toggleAtletaDisciplinaLote = (atletaId, checked) => {
+  const disc = window._loteDiscState.disciplina;
+  const a = Helpers.getAtleta(atletaId);
+  if (!a) return;
+  if (!Array.isArray(a.disciplinas)) a.disciplinas = [];
+  if (checked && !a.disciplinas.includes(disc)) {
+    a.disciplinas.push(disc);
+  } else if (!checked) {
+    a.disciplinas = a.disciplinas.filter((d) => d !== disc);
+  }
+  renderAsignarDisciplinasLoteModal();
+};
+
+window.marcarTodosDisciplinaVisible = (checked) => {
+  const st = window._loteDiscState;
+  const disc = st.disciplina;
+  DB.atletas.forEach((a) => {
+    const mCat = st.catFilter === 'Todas' || a.categoria === st.catFilter;
+    const mSearch = `${a.apellido} ${a.nombre} ${a.dni || ''}`
+      .toLowerCase()
+      .includes(st.search.trim().toLowerCase());
+    if (mCat && mSearch) {
+      if (!Array.isArray(a.disciplinas)) a.disciplinas = [];
+      if (checked && !a.disciplinas.includes(disc)) {
+        a.disciplinas.push(disc);
+      } else if (!checked) {
+        a.disciplinas = a.disciplinas.filter((d) => d !== disc);
+      }
+    }
+  });
+  renderAsignarDisciplinasLoteModal();
+};
+
+// 2. Modal de Registro del Atleta (Mobile-First: Lo hice / No pude + Resultados reales de la sesión + Esfuerzo RPE + Comentarios)
+let tempRegHecho = true;
+let tempRegSensacion = 4;
+let tempRegResultadoReal = '';
+let tempRegDistanciaReal = '';
+let tempRegTiempoReal = '';
+
+window.openRegistroModal = (atletaId, sesionId, defaultHecho) => {
+  const sesion = (DB.planes[atletaId] || []).find((s) => s.id === sesionId);
+  if (!sesion) return;
+  if (defaultHecho !== undefined) {
+    tempRegHecho = Boolean(defaultHecho);
+  } else {
+    tempRegHecho = sesion.estado !== 'no-realizado';
+  }
+  tempRegSensacion = sesion.sensacion || 4;
+  tempRegResultadoReal = sesion.resultadoReal || '';
+  tempRegDistanciaReal = sesion.distanciaRealKm != null ? String(sesion.distanciaRealKm) : (sesion.distanciaKm != null ? String(sesion.distanciaKm) : '');
+  tempRegTiempoReal = sesion.tiempoRealMin != null ? String(sesion.tiempoRealMin) : (sesion.duracionMin != null ? String(sesion.duracionMin) : '');
+  renderRegistroModalContent(atletaId, sesion);
+};
+
+window.setRegQuickResultado = (text) => {
+  const inp = document.getElementById('reg-resultado');
+  if (inp) {
+    if (inp.value.trim()) {
+      inp.value = `${inp.value.trim()} · ${text}`;
+    } else {
+      inp.value = text;
+    }
+  }
+};
+
+window.setRegQuickMotivo = (text) => {
+  const textarea = document.getElementById('reg-com');
+  if (textarea) {
+    textarea.value = text;
+  }
+};
+
+function renderRegistroModalContent(atletaId, sesion) {
+  const caras = [
+    { num: 1, emoji: '😣', label: '1 · Muy suave', desc: 'Sin esfuerzo' },
+    { num: 2, emoji: '😕', label: '2 · Cómodo', desc: 'Ritmo suave' },
+    { num: 3, emoji: '😐', label: '3 · Moderado', desc: 'Esfuerzo medio' },
+    { num: 4, emoji: '🙂', label: '4 · Exigente', desc: 'Ritmo fuerte' },
+    { num: 5, emoji: '💪', label: '5 · Máximo', desc: 'Todo dado' },
+  ];
+
+  const comentarioActual = document.getElementById('reg-com')?.value ?? (sesion.comentario || '');
+  const resActual = document.getElementById('reg-resultado')?.value ?? (tempRegResultadoReal || '');
+  const distActual = document.getElementById('reg-dist')?.value ?? (tempRegDistanciaReal || '');
+  const tiempoActual = document.getElementById('reg-tiempo')?.value ?? (tempRegTiempoReal || '');
+
+  showModalHtml(`
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <span class="inline-flex items-center gap-1.5 rounded-md bg-primary/15 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-primary">
+          <i data-lucide="clipboard-check" class="size-3"></i> Informe de Entrenamiento
+        </span>
+        <h2 class="mt-1 font-display text-2xl font-extrabold uppercase leading-tight sm:text-3xl">${esc(sesion.titulo)}</h2>
+        <p class="text-xs text-muted-foreground">
+          ${Helpers.fechaCorta(sesion.fecha)} · ${esc(sesion.tipo || 'Sesión')}${sesion.disciplina ? ` · 🏃 ${esc(sesion.disciplina)}` : ''}
+        </p>
+      </div>
+      <button type="button" onclick="closeModal()" class="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground">✕</button>
+    </div>
+
+    <div class="mt-4 space-y-4">
+      <!-- Selector Estado: Lo hice / No pude (Botones táctiles grandes) -->
+      <div>
+        <label class="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block mb-1.5">
+          ¿Pudiste realizar la sesión hoy?
+        </label>
+        <div class="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onclick="setRegHecho(true, '${atletaId}', '${sesion.id}')"
+            class="flex min-h-12 items-center justify-center gap-2 rounded-xl border-2 py-3 px-2 text-sm font-extrabold transition-all ${
+              tempRegHecho
+                ? 'border-success bg-success-soft text-success shadow-xs scale-[1.01]'
+                : 'border-border bg-card text-muted-foreground hover:bg-muted'
+            }"
+          >
+            <i data-lucide="check-circle-2" class="size-5"></i>
+            ✓ ¡Completado!
+          </button>
+          <button
+            type="button"
+            onclick="setRegHecho(false, '${atletaId}', '${sesion.id}')"
+            class="flex min-h-12 items-center justify-center gap-2 rounded-xl border-2 py-3 px-2 text-sm font-extrabold transition-all ${
+              !tempRegHecho
+                ? 'border-destructive bg-destructive/10 text-destructive shadow-xs scale-[1.01]'
+                : 'border-border bg-card text-muted-foreground hover:bg-muted'
+            }"
+          >
+            <i data-lucide="x-circle" class="size-5"></i>
+            ✕ No pude entrenar
+          </button>
+        </div>
+      </div>
+
       ${
         tempRegHecho
-          ? `<fieldset>
-              <legend class="mb-2 text-sm font-medium">¿Cómo te sentiste? (Escala de esfuerzo percibido)</legend>
-              <div class="flex justify-between gap-2">
-                ${caras
-                  .map((c, i) => {
-                    const v = i + 1;
-                    return `
+          ? `
+          <!-- Bloque de Resultados Reales -->
+          <div class="rounded-xl border border-primary/25 bg-primary/5 p-3.5 space-y-3">
+            <div>
+              <p class="text-xs font-bold uppercase tracking-wide text-primary">
+                📊 Resultados reales de la sesión
+              </p>
+              <p class="text-[11px] text-muted-foreground">
+                Indicá tus tiempos en las pasadas, metros conseguidos o distancia y ritmo real para tu entrenador.
+              </p>
+            </div>
+
+            <div>
+              <label for="reg-resultado" class="text-xs font-semibold block mb-1">
+                Tiempos de pasadas / marcas en campo / ritmo:
+              </label>
+              <input
+                id="reg-resultado"
+                value="${esc(resActual)}"
+                placeholder="Ej.: 6x400m en 1:16, 1:15, 1:14... o Jabalina 38.50 m o 10 km a 4:35/km"
+                class="h-10 w-full rounded-lg border bg-card px-3 text-sm font-medium outline-none focus:ring-2 focus:ring-primary"
+              />
+              <div class="mt-1.5 flex flex-wrap gap-1">
+                <button type="button" onclick="setRegQuickResultado('Completé todas las series al ritmo')" class="rounded bg-card border px-2 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground">
+                  + Todas al ritmo
+                </button>
+                <button type="button" onclick="setRegQuickResultado('Series progresivas')" class="rounded bg-card border px-2 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground">
+                  + Progresivas
+                </button>
+                <button type="button" onclick="setRegQuickResultado('Más rápido de lo previsto')" class="rounded bg-card border px-2 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground">
+                  + Más rápido
+                </button>
+                <button type="button" onclick="setRegQuickResultado('Buenas sensaciones de fuerza')" class="rounded bg-card border px-2 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground">
+                  + Mucha fuerza
+                </button>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label for="reg-dist" class="text-[11px] font-semibold text-muted-foreground block">Distancia real (km opcional)</label>
+                <input
+                  id="reg-dist"
+                  type="number"
+                  step="0.1"
+                  value="${esc(distActual)}"
+                  placeholder="Ej.: 8.5"
+                  class="mt-0.5 h-9 w-full rounded-lg border bg-card px-2.5 text-sm font-mono"
+                />
+              </div>
+              <div>
+                <label for="reg-tiempo" class="text-[11px] font-semibold text-muted-foreground block">Tiempo real (minutos)</label>
+                <input
+                  id="reg-tiempo"
+                  type="number"
+                  step="1"
+                  value="${esc(tiempoActual)}"
+                  placeholder="Ej.: 42"
+                  class="mt-0.5 h-9 w-full rounded-lg border bg-card px-2.5 text-sm font-mono"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Escala de Esfuerzo Percibido RPE -->
+          <fieldset class="space-y-2">
+            <legend class="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              💪 ¿Cómo te sentiste? (Escala de esfuerzo RPE)
+            </legend>
+            <div class="grid grid-cols-5 gap-1.5 sm:gap-2">
+              ${caras
+                .map((c) => {
+                  const isSel = tempRegSensacion === c.num;
+                  return `
                     <button
                       type="button"
-                      onclick="setRegSensacion(${v}, '${atletaId}', '${sesion.id}')"
-                      class="flex-1 rounded-lg border py-2 text-2xl transition-transform ${
-                        tempRegSensacion === v ? 'scale-105 border-primary bg-accent' : 'opacity-60 hover:opacity-100'
+                      onclick="setRegSensacion(${c.num}, '${atletaId}', '${sesion.id}')"
+                      class="flex flex-col items-center justify-center rounded-xl border-2 py-2 px-1 transition-all ${
+                        isSel
+                          ? 'border-primary bg-primary/10 text-primary shadow-xs scale-105'
+                          : 'border-border bg-card opacity-70 hover:opacity-100 hover:border-primary/50'
                       }"
                     >
-                      ${c}
+                      <span class="text-2xl sm:text-3xl">${c.emoji}</span>
+                      <span class="mt-1 text-[11px] font-bold leading-tight">${c.num}</span>
+                      <span class="hidden text-[9px] font-medium text-muted-foreground sm:inline">${c.desc}</span>
                     </button>
                   `;
-                  })
-                  .join('')}
-              </div>
-            </fieldset>`
-          : ''
+                })
+                .join('')}
+            </div>
+            <p class="text-center text-xs font-bold text-primary">
+              ${caras.find((c) => c.num === tempRegSensacion)?.label || ''}
+            </p>
+          </fieldset>
+          `
+          : `
+          <!-- Bloque cuando NO pudo entrenar -->
+          <div class="rounded-xl border border-destructive/30 bg-destructive/5 p-3.5 space-y-2.5">
+            <p class="text-xs font-bold uppercase tracking-wide text-destructive">
+              ✕ Motivo por el cual no pudiste entrenar
+            </p>
+            <p class="text-[11px] text-muted-foreground">
+              Avisale al entrenador Cristian para que pueda adaptar los descansos y la carga de tu semana:
+            </p>
+            <div class="flex flex-wrap gap-1">
+              <button type="button" onclick="setRegQuickMotivo('Molestia muscular en la pierna / dolor')" class="rounded-md border bg-card px-2 py-1 text-xs font-medium hover:border-destructive">
+                🦵 Molestia muscular
+              </button>
+              <button type="button" onclick="setRegQuickMotivo('Examen y estudio para la escuela/facultad')" class="rounded-md border bg-card px-2 py-1 text-xs font-medium hover:border-destructive">
+                📚 Examen / Estudio
+              </button>
+              <button type="button" onclick="setRegQuickMotivo('Clima adverso (lluvia torrencial / temporal de viento)')" class="rounded-md border bg-card px-2 py-1 text-xs font-medium hover:border-destructive">
+                🌧️ Lluvia / Viento
+              </button>
+              <button type="button" onclick="setRegQuickMotivo('Complicación de horario o trabajo familiar')" class="rounded-md border bg-card px-2 py-1 text-xs font-medium hover:border-destructive">
+                ⏰ Horario / Trabajo
+              </button>
+              <button type="button" onclick="setRegQuickMotivo('Enfermedad / estado gripal')" class="rounded-md border bg-card px-2 py-1 text-xs font-medium hover:border-destructive">
+                🤒 Gripe / Salud
+              </button>
+            </div>
+          </div>
+          `
       }
-      <div class="space-y-1.5">
-        <label for="reg-com" class="text-sm font-medium">Comentario y sensaciones</label>
+
+      <!-- Comentario libre -->
+      <div class="space-y-1">
+        <label for="reg-com" class="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          ${tempRegHecho ? '💬 Comentario adicional para tu entrenador (opcional)' : '💬 Explicación detallada para el entrenador'}
+        </label>
         <textarea
           id="reg-com"
           rows="3"
-          placeholder="${tempRegHecho ? 'Tiempos, molestias, cómo estuvo el día…' : '¿Qué pasó?'}"
-          class="w-full rounded-lg border bg-card p-3 text-sm"
+          placeholder="${
+            tempRegHecho
+              ? '¿Cómo estuvo el viento, el calzado, alguna molestia que quieras que sepa Cristian?'
+              : 'Detallá aquí qué pasó o cuándo pensás recuperar la sesión…'
+          }"
+          class="w-full rounded-xl border bg-card p-3 text-sm outline-none focus:ring-2 focus:ring-primary"
         >${esc(comentarioActual)}</textarea>
       </div>
-      <div class="flex justify-end gap-2">
-        <button type="button" onclick="closeModal()" class="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">Cancelar</button>
-        <button type="button" onclick="saveRegistroModal('${atletaId}', '${sesion.id}')" class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-95">Guardar</button>
+
+      <!-- Botones de Acción (Grandes para el celular) -->
+      <div class="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
+        <button
+          type="button"
+          onclick="closeModal()"
+          class="flex min-h-11 items-center justify-center rounded-xl border px-4 py-2.5 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onclick="saveRegistroModal('${atletaId}', '${sesion.id}')"
+          class="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-sm font-extrabold text-primary-foreground shadow-sm hover:opacity-95"
+        >
+          <i data-lucide="send" class="size-4"></i>
+          Guardar e informar al entrenador
+        </button>
       </div>
     </div>
   `);
@@ -4263,10 +6222,19 @@ window.setRegSensacion = (val, atletaId, sesionId) => {
 window.saveRegistroModal = (atletaId, sesionId) => {
   const sesion = (DB.planes[atletaId] || []).find((s) => s.id === sesionId);
   if (!sesion) return;
-  const com = document.getElementById('reg-com').value.trim();
+
+  const com = document.getElementById('reg-com')?.value.trim();
+  const resReal = document.getElementById('reg-resultado')?.value.trim();
+  const distReal = document.getElementById('reg-dist')?.value.trim();
+  const tiempoReal = document.getElementById('reg-tiempo')?.value.trim();
+
   sesion.estado = tempRegHecho ? 'realizado' : 'no-realizado';
+  sesion.resultadoReal = tempRegHecho && resReal ? resReal : undefined;
+  sesion.distanciaRealKm = tempRegHecho && distReal ? parseFloat(distReal) : undefined;
+  sesion.tiempoRealMin = tempRegHecho && tiempoReal ? parseFloat(tiempoReal) : undefined;
   sesion.sensacion = tempRegHecho ? tempRegSensacion : undefined;
   sesion.comentario = com || undefined;
+  sesion.fechaInforme = DB.hoy;
 
   // Recalcular porcentaje de adherencia del atleta automáticamente
   const atleta = Helpers.getAtleta(atletaId);
@@ -4282,8 +6250,8 @@ window.saveRegistroModal = (atletaId, sesionId) => {
   closeModal();
   showToast(
     sesion.estado === 'realizado'
-      ? '¡Entrenamiento registrado! Tu entrenador ya puede verlo.'
-      : 'Registro guardado'
+      ? '¡Entrenamiento registrado! Tu entrenador Cristian ya puede ver los resultados.'
+      : 'Aviso guardado para el entrenador'
   );
   renderApp();
 };
@@ -4308,6 +6276,11 @@ window.autoFillNuevoAtletaCreds = () => {
 };
 
 window.openNuevoAtletaModal = () => {
+  const disciplinasCatalogo =
+    Array.isArray(DB.disciplinasDisponibles) && DB.disciplinasDisponibles.length > 0
+      ? DB.disciplinasDisponibles
+      : ['Running', 'Velocidad', 'Medio Fondo', 'Fondo', 'Cross / Trail', 'Saltos', 'Lanzamientos', 'Marcha', 'Iniciación Atlética'];
+
   showModalHtml(`
     <div class="flex items-start justify-between">
       <div>
@@ -4339,6 +6312,7 @@ window.openNuevoAtletaModal = () => {
         <div>
           <label class="text-xs font-medium">Categoría</label>
           <select id="na-cat" class="h-9 w-full rounded-lg border bg-card px-2 text-sm">
+            <option value="Infantiles">Infantiles</option>
             <option value="U12">U12</option>
             <option value="U14">U14</option>
             <option value="U16" selected>U16</option>
@@ -4381,6 +6355,10 @@ window.openNuevoAtletaModal = () => {
           <input id="na-tel" placeholder="+54 2920 ..." class="h-9 w-full rounded-lg border bg-card px-3 text-sm" />
         </div>
       </div>
+      <div class="rounded-lg border bg-muted/30 p-2.5 space-y-2 max-h-56 overflow-y-auto">
+        <label class="text-xs font-semibold text-primary block">🏃 Disciplinas que entrena (Running · Pista · Campo)</label>
+        ${renderBloquesDisciplinasCheckboxes('na-disciplinas-chk', [])}
+      </div>
       <div>
         <label class="text-xs font-medium">Tutor / Familia (si es menor de edad)</label>
         <input id="na-tutor" placeholder="Ej.: Familia Rivas (dejar vacío si es mayor de 18)" class="h-9 w-full rounded-lg border bg-card px-3 text-sm" />
@@ -4401,6 +6379,9 @@ window.saveNuevoAtleta = (e) => {
   const usuario = document.getElementById('na-user').value.trim().toLowerCase();
   const password = document.getElementById('na-pass').value.trim();
   const fnac = document.getElementById('na-fnac').value;
+  const checkedDiscs = Array.from(document.querySelectorAll('input[name="na-disciplinas-chk"]:checked')).map(
+    (el) => el.value
+  );
   const id = `${nombre}-${apellido}`
     .toLowerCase()
     .normalize('NFD')
@@ -4426,6 +6407,7 @@ window.saveNuevoAtleta = (e) => {
     genero: document.getElementById('na-genero').value,
     categoria: document.getElementById('na-cat').value,
     nivel: document.getElementById('na-nivel').value,
+    disciplinas: checkedDiscs,
     ciudad: 'Valcheta',
     email: '',
     telefono: document.getElementById('na-tel').value.trim(),
@@ -4482,7 +6464,9 @@ window.openNuevaCompetenciaModal = () => {
         <div>
           <label class="text-xs font-medium">Tipo</label>
           <select id="nc-tipo" class="h-10 w-full rounded-lg border bg-card px-3 text-sm">
+            <option>Pista y Campo</option>
             <option>Pista</option>
+            <option>Campo</option>
             <option>Calle</option>
             <option>Cross</option>
             <option>Trail</option>
@@ -4495,7 +6479,7 @@ window.openNuevaCompetenciaModal = () => {
       </div>
       <div>
         <label class="text-xs font-medium">Pruebas / Distancias (separadas por coma)</label>
-        <input id="nc-dist" required value="80 m, 150 m, 600 m, 1500 m" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
+        <input id="nc-dist" required value="80 m, 150 m, 800 m, 1500 m, Salto en Largo, Lanzamiento de Jabalina, Bala" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
       </div>
       <div class="mt-2 flex justify-end gap-2">
         <button type="button" onclick="closeModal()" class="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">Cancelar</button>
@@ -4900,36 +6884,60 @@ window.saveNuevoCobro = (e, editPagoId = '') => {
   renderApp();
 };
 
-// 6. Modal de Nuevo Resultado / Marca Personal
+// 6. Modal de Nuevo Resultado / Marca Personal (Running, Pista y Campo)
+window.onChangePruebaResultadoModal = (val) => {
+  const esCampo = Helpers.esPruebaDeCampo(val);
+  const lbl = document.getElementById('nr-tiempo-label');
+  const inp = document.getElementById('nr-tiempo');
+  if (lbl) {
+    lbl.textContent = esCampo ? 'Marca en metros (ej.: 38.40 m)' : 'Tiempo / Marca (mm:ss)';
+  }
+  if (inp) {
+    inp.placeholder = esCampo ? 'Ej.: 38.40 m o 4.85 m' : 'Ej.: 4:45 o 12.8';
+  }
+};
+
 window.openNuevoResultadoModal = (atletaId, defaultCompetencia = '', defaultFecha = '') => {
   const atleta = Helpers.getAtleta(atletaId);
   if (!atleta) return;
-  const distanciasDisponibles = Array.from(
-    new Set(['80 m', '150 m', '400 m', ...(DB.distanciasRanking || ['800 m', '1500 m', '3000 m', '5K', '10K', '21K'])])
-  );
+  const bloques = window.DISCIPLINAS_POR_BLOQUE || [];
+
   showModalHtml(`
     <div class="flex items-start justify-between">
       <div>
         <h2 class="text-xl font-bold">Cargar resultado · ${esc(atleta.nombre)}</h2>
-        <p class="text-sm text-muted-foreground">Actualiza automáticamente su historial, marcas personales (PB), gráfico de evolución y ranking público.</p>
+        <p class="text-sm text-muted-foreground">Actualiza automáticamente su historial, marcas personales (PB en Running, Pista o Campo) y ranking público.</p>
       </div>
       <button type="button" onclick="closeModal()" class="text-muted-foreground hover:text-foreground">✕</button>
     </div>
     <form onsubmit="saveNuevoResultado(event, '${atletaId}')" class="mt-4 grid gap-3">
       <div>
-        <label class="text-xs font-medium">Competencia</label>
+        <label class="text-xs font-medium">Competencia / Torneo</label>
         <input id="nr-comp" required value="${esc(defaultCompetencia)}" placeholder="Ej.: Torneo Provincial Valcheta" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
       </div>
-      <div class="grid grid-cols-3 gap-3">
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div>
-          <label class="text-xs font-medium">Prueba / Distancia</label>
-          <select id="nr-dist" class="h-10 w-full rounded-lg border bg-card px-2 text-sm">
-            ${distanciasDisponibles.map((d) => `<option value="${d}" ${d === '1500 m' ? 'selected' : ''}>${d}</option>`).join('')}
+          <label class="text-xs font-medium">Prueba (Running · Pista · Campo)</label>
+          <select id="nr-dist" onchange="onChangePruebaResultadoModal(this.value)" class="h-10 w-full rounded-lg border bg-card px-2 text-sm font-medium">
+            ${bloques
+              .map(
+                (b) => `
+                <optgroup label="${esc(b.titulo)}">
+                  ${(b.pruebasSugeridas || [])
+                    .map(
+                      (d) =>
+                        `<option value="${esc(d)}" ${d === '1500 m' ? 'selected' : ''}>${esc(d)}</option>`
+                    )
+                    .join('')}
+                </optgroup>
+              `
+              )
+              .join('')}
           </select>
         </div>
         <div>
-          <label class="text-xs font-medium">Marca / Tiempo</label>
-          <input id="nr-tiempo" required placeholder="4:45" class="h-10 w-full rounded-lg border bg-card px-3 text-sm" />
+          <label id="nr-tiempo-label" class="text-xs font-medium">Tiempo / Marca (mm:ss)</label>
+          <input id="nr-tiempo" required placeholder="Ej.: 4:45 o 38.40 m" class="h-10 w-full rounded-lg border bg-card px-3 text-sm font-semibold" />
         </div>
         <div>
           <label class="text-xs font-medium">Fecha</label>
@@ -4960,7 +6968,11 @@ window.saveNuevoResultado = (e, atletaId) => {
   if (!atleta) return;
   const competencia = document.getElementById('nr-comp').value.trim();
   const distancia = document.getElementById('nr-dist').value;
-  const tiempo = document.getElementById('nr-tiempo').value.trim();
+  let tiempo = document.getElementById('nr-tiempo').value.trim();
+  const esCampo = Helpers.esPruebaDeCampo(distancia);
+  if (esCampo && tiempo && !tiempo.toLowerCase().includes('m')) {
+    tiempo = `${tiempo} m`;
+  }
   const fecha = document.getElementById('nr-fecha').value;
   const posGeneral = Number(document.getElementById('nr-posg').value);
   const posCategoria = Number(document.getElementById('nr-posc').value);
@@ -4976,36 +6988,48 @@ window.saveNuevoResultado = (e, atletaId) => {
     posCategoria,
   });
 
+  if (Array.isArray(DB.distanciasRanking) && !DB.distanciasRanking.includes(distancia)) {
+    DB.distanciasRanking.push(distancia);
+  }
+
   atleta.marcas = atleta.marcas || [];
   const marcaExistente = atleta.marcas.find((m) => m.distancia === distancia);
   if (!marcaExistente) {
     atleta.marcas.push({ distancia, tiempo, fecha, competencia });
+  } else if (esCampo) {
+    if (Helpers.aMetros(tiempo) >= Helpers.aMetros(marcaExistente.tiempo)) {
+      marcaExistente.tiempo = tiempo;
+      marcaExistente.fecha = fecha;
+      marcaExistente.competencia = competencia;
+    }
   } else if (Helpers.aSegundos(tiempo) <= Helpers.aSegundos(marcaExistente.tiempo)) {
     marcaExistente.tiempo = tiempo;
     marcaExistente.fecha = fecha;
     marcaExistente.competencia = competencia;
   }
 
-  // Alimentar automáticamente el gráfico de evolución (ritmo en min/km)
-  const segs = Helpers.aSegundos(tiempo);
-  let distKm = 0;
-  if (distancia.toUpperCase().endsWith('K')) {
-    distKm = parseFloat(distancia);
-  } else if (distancia.toLowerCase().includes('m')) {
-    distKm = parseFloat(distancia) / 1000;
-  }
-  if (segs > 0 && distKm > 0) {
-    const ritmoMinKm = Number((segs / 60 / distKm).toFixed(2));
-    if (ritmoMinKm > 1.5 && ritmoMinKm < 15) {
-      atleta.evolucion = atleta.evolucion || [];
-      atleta.evolucion.push({ fecha, ritmo: ritmoMinKm });
-      atleta.evolucion.sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
+  // Alimentar automáticamente el gráfico de evolución (ritmo en min/km) solo en pruebas de carrera
+  if (!esCampo) {
+    const segs = Helpers.aSegundos(tiempo);
+    let distKm = 0;
+    if (distancia.toUpperCase().endsWith('K')) {
+      distKm = parseFloat(distancia);
+    } else if (distancia.toLowerCase().includes('m')) {
+      distKm = parseFloat(distancia) / 1000;
+    }
+    if (segs > 0 && distKm > 0) {
+      const ritmoMinKm = Number((segs / 60 / distKm).toFixed(2));
+      if (ritmoMinKm > 1.5 && ritmoMinKm < 15) {
+        atleta.evolucion = atleta.evolucion || [];
+        atleta.evolucion.push({ fecha, ritmo: ritmoMinKm });
+        atleta.evolucion.sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
+      }
     }
   }
 
   saveDB();
   closeModal();
-  showToast('Resultado, marca personal y evolución actualizados');
+  showToast('Resultado y marca personal actualizados');
   renderApp();
 };
 
